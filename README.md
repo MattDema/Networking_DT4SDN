@@ -26,22 +26,25 @@ Build an intelligent Digital Twin that predicts network traffic 30-60 seconds in
 ### Setup
 
 **Windows:**
+```bash
 .\setup_env.ps1
-python test_setup.py
+```
 
-text
+```bash
+python test_setup.py
+```
 
 **macOS:**
+```bash
 ./setup_env_mac.sh
 python test_setup.py
-
-text
+```
 
 **Linux/VM:**
+```bash
 ./setup_vm.sh
 python3 test_setup.py
-
-text
+```
 
 ### Running the Project
 
@@ -49,6 +52,7 @@ See [docs/SETUP.md](docs/SETUP.md) for detailed instructions.
 
 ## 📁 Project Structure
 
+```bash
 Networking_DT4SDN/
 ├── src/ # Source code
 │ ├── controllers/ # RYU controllers
@@ -59,8 +63,7 @@ Networking_DT4SDN/
 ├── data/ # Training data & logs
 ├── tests/ # Unit tests
 └── docs/ # Documentation
-
-text
+```
 
 ## 📚 Documentation
 
@@ -71,18 +74,20 @@ text
 ## 🧪 Testing
 
 Run environment test
+```bash
 python test_setup.py
+```
 
 Run unit tests
+```bash
 pytest tests/
-
-text
+```
 
 ## 👥 Team
 
-- Student 1: ML Module Development
-- Student 2: Web Interface
-- Student 3: Integration & Testing
+- De Marco Matthew
+- Lo Iacono Andrea
+- Revrenna Jago
 
 ## 📝 License
 
@@ -92,34 +97,4 @@ Academic project for Networking 2 course, University of Trento.
 
 **Course**: Networking 2 (Softwarized and Virtualized Mobile Networks)  
 **Professor**: Prof. Fabrizio Granelli  
-**Year**: 2024-2025
-6. Create Empty init.py Files
-Run this to make Python treat directories as packages:
-
-bash
-# On Mac/Linux or Git Bash on Windows
-touch src/__init__.py
-touch src/controllers/__init__.py
-touch src/ml_models/__init__.py
-touch src/web_interface/__init__.py
-touch src/database/__init__.py
-touch src/utils/__init__.py
-touch tests/__init__.py
-Or create each file manually with empty content.
-
-7. Git Commit All Documentation
-bash
-git add .
-git commit -m "Add comprehensive setup scripts and documentation
-
-- Added Mac setup script (setup_env_mac.sh)
-- Added environment test script (test_setup.py)
-- Created complete documentation:
-  - SETUP.md: Installation guide for all platforms
-  - ARCHITECTURE.md: System design and structure
-  - API.md: API endpoints and schemas
-- Updated README.md with quick start guide
-- Updated requirements.txt with detailed comments
-"
-
-git push origin main
+**Year**: 2025-2025
