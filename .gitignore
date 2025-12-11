@@ -1,0 +1,39 @@
+# .gitignore
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Data files
+data/training/*
+data/logs/*
+!data/**/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Reference repos
+reference/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ML models (large files)
+*.h5
+*.pkl
+*.pth
+
+# Database
+*.db
+*.sqlite
