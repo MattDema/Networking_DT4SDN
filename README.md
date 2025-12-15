@@ -97,4 +97,4 @@ Academic project for Networking 2 course, University of Trento.
 
 **Course**: Networking 2 (Softwarized and Virtualized Mobile Networks)  
 **Professor**: Prof. Fabrizio Granelli  
-**Year**: 2025-2025
+**Year**: 2025-2026
