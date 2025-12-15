@@ -322,9 +322,16 @@ DASHBOARD_HTML = """
             <div class="stat-label">Discovered Hosts</div>
         </div>
 
-        <!-- Database Stats -->
+        <!-- Database -->
         <div class="card">
-            <h3>🗄️ Database</h3>
+            <h3>🗄️ Database
+                <span
+                    class="info-inline"
+                    title="Traffic: righe in 'traffic_stats' (snapshot porte). Flows: righe in 'flow_stats' (snapshot flow entries). Hosts: righe in 'hosts' (MAC unici)."
+                    onclick="alert('Traffic: numero di snapshot delle statistiche delle porte salvati in \\ntraffic_stats (una riga per porta per ogni raccolta).\\n\\nFlows: snapshot delle flow entries salvate in \\nflow_stats (una riga per ogni flow per ogni raccolta).\\n\\nHosts: host scoperti salvati in \\nhosts (un record per MAC, aggiornato su ogni discovery).')"
+                    style="cursor: pointer; margin-left: 8px; font-size: 14px; color: var(--text-secondary); padding: 2px 6px; border-radius: 12px; border: 1px solid var(--border); background: rgba(0,0,0,0.03);"
+                >ⓘ</span>
+            </h3>
             <div class="db-stats">
                 <div class="db-stat">
                     <div class="db-stat-value">{{ db_stats.traffic_stats }}</div>
