@@ -3,29 +3,29 @@ import sys
 import time
 import threading
 import requests
-import numpy as np
 
-import sys
-import os
-
-# 1. Get the directory where 'orchestrator.py' is located (e.g., .../src/controller)
+# 1. Setup paths to import modules from sibling directories
 current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# 2. Get the parent directory (e.g., .../src)
 src_dir = os.path.dirname(current_dir)
-
-# 3. Add 'src' to the system path so Python can find 'database', 'web_interface', etc.
 sys.path.append(src_dir)
 
 from database.db_manager import get_db
-#from ml_models.traffic_predictor import TrafficPredictor
 from web_interface.app import start_web_server, get_active_switches, get_hosts, RYU_API_URL
 
+# Try to import TrafficPredictor
+try:
+    from ml_models.traffic_predictor import TrafficPredictor
+    ML_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ [Orchestrator] ML dependencies not found: {e}")
+    ML_AVAILABLE = False
+
 # --- CONFIGURATION ---
-COLLECTION_INTERVAL = 2  # How often to read from Physical Twin
-PREDICTION_INTERVAL = 5  # How often to predict the future
-MODEL_PATH = 'models/traffic_model.pt'
-SCALER_PATH = 'models/scaler.pkl'
+# CRITICAL: Set to 1s to match the ML model's training resolution (60 samples = 60 seconds)
+COLLECTION_INTERVAL = 1  
+PREDICTION_INTERVAL = 5  # Predict every 5 seconds (inference is fast, but no need to spam)
+MODEL_PATH = os.path.join(src_dir, 'ml_models', 'congestion_ultimate.pt')
+SCALER_PATH = os.path.join(src_dir, 'ml_models', 'scaler.pkl')
 
 
 def collect_data_periodically():
@@ -35,16 +35,13 @@ def collect_data_periodically():
 
     while True:
         try:
-            # Get active switches from Ryu (using helper from app.py)
             switches = get_active_switches()
-
             for dpid in switches:
-                # A. Collect Port Stats
+                # Collect Port Stats
                 try:
                     url = f"{RYU_API_URL}/stats/port/{dpid}"
-                    resp = requests.get(url, timeout=2)
+                    resp = requests.get(url, timeout=0.5) # Lower timeout for faster polling
                     ports = resp.json().get(str(dpid), [])
-
                     for port in ports:
                         db.save_port_stats(
                             dpid=dpid,
@@ -57,12 +54,11 @@ def collect_data_periodically():
                 except Exception:
                     pass
 
-                # B. Collect Flow Stats (Optional, good for debugging)
+                # Collect Flow Stats
                 try:
                     url = f"{RYU_API_URL}/stats/flow/{dpid}"
-                    resp = requests.get(url, timeout=2)
+                    resp = requests.get(url, timeout=0.5)
                     flows = resp.json().get(str(dpid), [])
-
                     for flow in flows:
                         db.save_flow_stats(
                             dpid=dpid,
@@ -75,7 +71,7 @@ def collect_data_periodically():
                 except Exception:
                     pass
 
-            # C. Save Hosts
+            # Save Hosts
             hosts = get_hosts()
             for host in hosts:
                 db.save_host(host['mac'], host['dpid'], host['port'])
@@ -88,8 +84,10 @@ def collect_data_periodically():
 
 def run_prediction_loop():
     """Background thread to predict future traffic using the trained model."""
-"""
-    # 1. Check if model exists
+    if not ML_AVAILABLE:
+        print("⚠ [Predictor] ML Module not available. Prediction disabled.")
+        return
+
     if not os.path.exists(MODEL_PATH):
         print(f"⚠ [Predictor] Model not found at {MODEL_PATH}. Prediction disabled.")
         return
@@ -97,60 +95,72 @@ def run_prediction_loop():
     print(f"✅ [Predictor] Loading model from {MODEL_PATH}...")
 
     try:
-        # 2. Initialize Predictor (Loads PyTorch model into memory)
-        predictor = TrafficPredictor(MODEL_PATH, SCALER_PATH if os.path.exists(SCALER_PATH) else None)
+        scaler = SCALER_PATH if os.path.exists(SCALER_PATH) else None
+        predictor = TrafficPredictor(MODEL_PATH, scaler)
         print("✅ [Predictor] Model loaded successfully.")
     except Exception as e:
         print(f"❌ [Predictor] Failed to load model: {e}")
         return
 
-    # Create a dedicated DB connection for this thread
     db = get_db()
 
     while True:
         try:
-            # 3. Identify Links to Predict
-            # We want to predict traffic for every active port we have seen recently.
-            # You might need to add 'get_active_links()' to your db_manager,
-            # or just query distinct dpid/port pairs from the port_stats table.
-            active_links = db.get_active_links()  # Returns list of dicts: [{'dpid': 1, 'port': 1}, ...]
+            # 1. Get active switches
+            switches = get_active_switches()
 
-            for link in active_links:
-                dpid = link['dpid']
-                port = link['port']
-                link_id = f"s{dpid}-eth{port}"  # Create a unique ID string
-
+            for dpid in switches:
+                # 2. Get active ports for this switch
                 try:
-                    # 4. Make Prediction
-                    # The predict_next_frame method (from your teammate's code)
-                    # handles fetching history from DB automatically.
-                    result = predictor.predict_next_frame(link_id, db)
-
-                    # Result is a dict: {'link_id': ..., 'predictions': [...], ...}
-                    predicted_bytes = result['predictions'][0]  # Take the immediate next step
-
-                    # 5. Store Prediction in DB
-                    db.store_prediction(
-                        dpid=dpid,
-                        port_no=port,
-                        predicted_bytes=float(predicted_bytes),
-                        timestamp=time.time()
-                    )
-
-                    # Optional: Print to console to see it working
-                    # print(f"🔮 [ML] {link_id}: {predicted_bytes:.0f} bytes predicted")
-
-                except ValueError:
-                    # This happens if there isn't enough history (e.g. startup)
+                    url = f"{RYU_API_URL}/stats/port/{dpid}"
+                    resp = requests.get(url, timeout=1)
+                    ports = resp.json().get(str(dpid), [])
+                    
+                    # 3. Predict for each active port
+                    for port_info in ports:
+                        port_no = port_info.get('port_no')
+                        if port_no == 'LOCAL': continue 
+                        
+                        try:
+                            # Delegate data fetching and prep to the predictor
+                            # It will fetch the last 60 samples (which now equals 60 seconds)
+                            result = predictor.predict_next_frame(dpid, port_no, db)
+                            
+                            # Extract prediction
+                            prediction = result['predictions']
+                            # Handle scalar or array output
+                            if hasattr(prediction, 'item'):
+                                predicted_val = prediction.item()
+                            elif hasattr(prediction, '__iter__'):
+                                predicted_val = float(prediction[0])
+                            else:
+                                predicted_val = float(prediction)
+                            
+                            # Save to DB
+                            db.save_prediction(
+                                dpid=dpid,
+                                predicted_packets=0,
+                                predicted_bytes=int(predicted_val),
+                                horizon=predictor.prediction_horizon
+                            )
+                            
+                            # print(f"🔮 [ML] s{dpid}:p{port_no} -> Predicted {predicted_val:.0f} bytes")
+                            
+                        except ValueError:
+                            # Not enough history yet (need 60s of data), skip silently
+                            pass
+                        except Exception as e:
+                            # print(f"⚠ [Predictor] Error on s{dpid}:p{port_no}: {e}")
+                            pass
+                            
+                except Exception:
                     pass
-                except Exception as e:
-                    print(f"⚠ [Predictor] Failed for {link_id}: {e}")
 
         except Exception as e:
             print(f"⚠ [Predictor] Loop Error: {e}")
 
         time.sleep(PREDICTION_INTERVAL)
-"""
+
 
 # --- MAIN ENTRY POINT ---
 if __name__ == '__main__':
@@ -167,9 +177,9 @@ if __name__ == '__main__':
     t_pred = threading.Thread(target=run_prediction_loop, daemon=True)
     t_pred.start()
 
-    # 3. Start Web Server (Blocking - Keeps app alive)
-    # This calls the Flask app defined in src/web_interface/app.py
+    # 3. Start Web Server (Blocking)
     try:
+        print("✅ [Web] Starting Dashboard on port 5000...")
         start_web_server(host='0.0.0.0', port=5000)
     except KeyboardInterrupt:
         print("\nShutting down Orchestrator...")
