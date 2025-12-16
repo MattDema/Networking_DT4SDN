@@ -16,6 +16,12 @@ data/training/*
 data/logs/*
 !data/**/.gitkeep
 
+# Docs Files
+docs/previous/
+
+# Models
+models/
+
 # IDE
 .vscode/
 .idea/

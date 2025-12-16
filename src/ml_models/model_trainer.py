@@ -33,8 +33,8 @@ class TrafficDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 
-class TrafficLSTM(nn.Module):
-    """LSTM model for traffic prediction"""
+""" class TrafficLSTM(nn.Module):
+    # LSTM model for traffic prediction
     
     def __init__(self, input_size: int, hidden_units: List[int], 
                  prediction_horizon: int, dropout: float = 0.2):
@@ -77,6 +77,50 @@ class TrafficLSTM(nn.Module):
         x = self.fc(x)  # (batch, prediction_horizon)
         
         # Reshape to (batch, prediction_horizon, 1)
+        x = x.unsqueeze(-1)
+        
+        return x """
+
+class TrafficLSTM(nn.Module):
+    def __init__(self, input_size: int, hidden_units: List[int], 
+                 prediction_horizon: int, dropout: float = 0.2,
+                 bidirectional: bool = True):  # NEW parameter
+        super(TrafficLSTM, self).__init__()
+        
+        self.hidden_units = hidden_units
+        self.num_layers = len(hidden_units)
+        self.bidirectional = bidirectional
+        
+        # LSTM layers
+        self.lstm_layers = nn.ModuleList()
+        
+        # First layer
+        self.lstm_layers.append(
+            nn.LSTM(input_size, hidden_units[0], batch_first=True, 
+                   bidirectional=bidirectional)  # Enable bidirectional
+        )
+        
+        # Additional layers
+        for i in range(1, len(hidden_units)):
+            input_dim = hidden_units[i-1] * (2 if bidirectional else 1)  # Account for bidirectional
+            self.lstm_layers.append(
+                nn.LSTM(input_dim, hidden_units[i], batch_first=True,
+                       bidirectional=bidirectional)
+            )
+        
+        self.dropout = nn.Dropout(dropout)
+        
+        # Output layer (account for bidirectional)
+        final_hidden_size = hidden_units[-1] * (2 if bidirectional else 1)
+        self.fc = nn.Linear(final_hidden_size, prediction_horizon)
+    
+    def forward(self, x):
+        for lstm in self.lstm_layers:
+            x, _ = lstm(x)
+            x = self.dropout(x)
+        
+        x = x[:, -1, :]  # Take last timestep
+        x = self.fc(x)
         x = x.unsqueeze(-1)
         
         return x
@@ -217,7 +261,7 @@ class TrafficModelTrainer:
         print("✓ Model built successfully")
     
     def train(self, epochs: int = 50, batch_size: int = 32, 
-              validation_split: float = 0.1, learning_rate: float = 0.001):
+              validation_split: float = 0.1, learning_rate: float = 0.0001):
         """Train the model"""
         if self.model is None:
             raise ValueError("Model not built. Call build_model() first.")
@@ -247,7 +291,7 @@ class TrafficModelTrainer:
         
         best_val_loss = float('inf')
         patience_counter = 0
-        patience = 20 # Number of epochs to wait before early stopping
+        patience = 300 # Number of epochs to wait before early stopping
         
         # Training loop
         for epoch in range(epochs):
