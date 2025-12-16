@@ -8,10 +8,18 @@ import numpy as np
 import sys
 import os
 
+# 1. Get the directory where 'orchestrator.py' is located (e.g., .../src/controller)
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
-from src.database.db_manager import get_db
-from src.ml_models.traffic_predictor import TrafficPredictor
-from src.web_interface.app import start_web_server, get_active_switches, get_hosts, RYU_API_URL
+# 2. Get the parent directory (e.g., .../src)
+src_dir = os.path.dirname(current_dir)
+
+# 3. Add 'src' to the system path so Python can find 'database', 'web_interface', etc.
+sys.path.append(src_dir)
+
+from database.db_manager import get_db
+#from ml_models.traffic_predictor import TrafficPredictor
+from web_interface.app import start_web_server, get_active_switches, get_hosts, RYU_API_URL
 
 # --- CONFIGURATION ---
 COLLECTION_INTERVAL = 2  # How often to read from Physical Twin
@@ -80,6 +88,7 @@ def collect_data_periodically():
 
 def run_prediction_loop():
     """Background thread to predict future traffic using the trained model."""
+"""
     # 1. Check if model exists
     if not os.path.exists(MODEL_PATH):
         print(f"⚠ [Predictor] Model not found at {MODEL_PATH}. Prediction disabled.")
@@ -94,7 +103,7 @@ def run_prediction_loop():
     except Exception as e:
         print(f"❌ [Predictor] Failed to load model: {e}")
         return
-"""
+
     # Create a dedicated DB connection for this thread
     db = get_db()
 
