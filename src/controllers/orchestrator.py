@@ -8,20 +8,22 @@ import numpy as np
 import sys
 import os
 
-
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.dirname(current_dir)
 sys.path.append(src_dir)
 
+project_root= os.path.dirname(src_dir)
+
 from database.db_manager import get_db
-#from ml_models.traffic_predictor import TrafficPredictor
+from ml_models.traffic_predictor import TrafficPredictor
 from web_interface.app import start_web_server, get_active_switches, get_hosts, RYU_API_URL
 
 # --- CONFIGURATION ---
 COLLECTION_INTERVAL = 2  # How often to read from Physical Twin
 PREDICTION_INTERVAL = 5  # How often to predict the future
-MODEL_PATH = 'models/traffic_model.pt'
-SCALER_PATH = 'models/scaler.pkl'
+# 2. Define Paths using the absolute project root
+MODEL_PATH = os.path.join(project_root, 'models', 'congestion_ultimate.pt')
+SCALER_PATH = os.path.join(project_root, 'models', 'congestion_ultimate_scaler.pkl')
 
 
 def collect_data_periodically():
@@ -84,7 +86,7 @@ def collect_data_periodically():
 
 def run_prediction_loop():
     """Background thread to predict future traffic using the trained model."""
-    """"
+
     # 1. Check if model exists
     if not os.path.exists(MODEL_PATH):
         print(f"⚠ [Predictor] Model not found at {MODEL_PATH}. Prediction disabled.")
@@ -99,6 +101,7 @@ def run_prediction_loop():
     except Exception as e:
         print(f"❌ [Predictor] Failed to load model: {e}")
         return
+
 
     # Create a dedicated DB connection for this thread
     db = get_db()
@@ -146,7 +149,6 @@ def run_prediction_loop():
             print(f"⚠ [Predictor] Loop Error: {e}")
 
         time.sleep(PREDICTION_INTERVAL)
-"""
 
 # --- MAIN ENTRY POINT ---
 if __name__ == '__main__':
