@@ -1,14 +1,20 @@
 # src/web_interface/app.py
 import os
+import sys
 import requests
 import json
 from flask import Flask, render_template_string
 
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.dirname(current_dir)
+sys.path.append(src_dir)
+
 app = Flask(__name__)
 
-from src.database.db_manager import get_db
+from database.db_manager import get_db
 
-# --- CONFIGURATION ---
+# - CONFIGURATION ---
 # We define these here because the Dashboard needs them to fetch live data
 PT_IP = os.getenv('PT_IP', '127.0.0.1')
 RYU_API_URL = f"http://{PT_IP}:8080"
