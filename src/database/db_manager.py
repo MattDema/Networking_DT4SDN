@@ -235,12 +235,48 @@ class DatabaseManager:
 
                 return df
 
-# Singleton instance
-_db_instance = None
+    def get_recent_traffic(self, link_id: str, duration_seconds: int = 60):
+        """
+        Fetches recent traffic history for a specific link ID (e.g., 's1-eth1').
+        """
+        import pandas as pd
 
-def get_db() -> DatabaseManager:
-    """Get singleton database instance."""
-    global _db_instance
-    if _db_instance is None:
-        _db_instance = DatabaseManager()
-    return _db_instance
+        # 1. Parse "s1-eth1" -> dpid=1, port=1
+        try:
+            clean_id = link_id.replace('s', '')
+            parts = clean_id.split('-eth')
+            dpid = int(parts[0])
+            port_no = int(parts[1])
+        except Exception:
+            return pd.DataFrame()
+
+        # 2. Use the connection context to read into Pandas
+        with self._get_connection() as conn:
+            query = '''
+                SELECT tx_bytes, timestamp 
+                FROM traffic_stats 
+                WHERE dpid = ? AND port_no = ? 
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            '''
+            # Fetch 2x the duration to ensure we have enough data points (approx 1 per sec)
+            df = pd.read_sql_query(query, conn, params=(dpid, port_no, duration_seconds * 2))
+
+        # 3. Rename and Sort (Post-processing)
+        if not df.empty:
+            df = df.rename(columns={'tx_bytes': 'bytes_sent'})
+            df = df.sort_values('timestamp', ascending=True)
+
+        return df
+# src/database/db_manager.py
+
+# ... (DatabaseManager class definition) ...
+
+def get_db():
+    """
+    Returns a NEW DatabaseManager instance every time.
+    Crucial for multi-threading: Every thread (Collector, Predictor, Flask)
+    needs its own separate connection to the SQLite file.
+    """
+    db = DatabaseManager()
+    return db

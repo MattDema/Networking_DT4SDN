@@ -137,7 +137,7 @@ def run_prediction_loop():
                     )
 
                     # Optional: Print to console to see it working
-                    # print(f"🔮 [ML] {link_id}: {predicted_bytes:.0f} bytes predicted")
+                    print(f"🔮 [ML] {link_id}: {predicted_bytes:.0f} bytes predicted")
 
                 except ValueError:
                     # This happens if there isn't enough history (e.g. startup)
