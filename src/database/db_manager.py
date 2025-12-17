@@ -169,6 +169,71 @@ class DatabaseManager:
                 stats[table] = count
             return stats
 
+    def get_active_links(self) -> List[Dict]:
+        """
+        Returns a list of links (dpid, port) that have reported traffic
+        in the last 5 minutes.
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute('''
+                SELECT DISTINCT dpid, port_no 
+                FROM traffic_stats 
+                WHERE timestamp >= datetime('now', '-5 minutes')
+            ''').fetchall()
+
+            return [{'dpid': row['dpid'], 'port': row['port_no']} for row in rows]
+
+    def store_prediction(self, dpid: int, port_no: int,
+                         predicted_bytes: float, timestamp=None):
+        """
+        Saves a single prediction entry to the database.
+        """
+        # Format timestamp if provided as a number (Unix time)
+        ts_val = timestamp
+        if isinstance(timestamp, (int, float)):
+            import datetime
+            ts_val = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+        with self._get_connection() as conn:
+            conn.execute('''
+                INSERT INTO predictions 
+                (dpid, port_no, predicted_bytes, timestamp, prediction_horizon)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (dpid, port_no, float(predicted_bytes), ts_val, 5))
+
+            def get_recent_traffic(self, link_id: str, duration_seconds: int = 60):
+                """
+                Fetches recent traffic history for a specific link ID (e.g., 's1-eth1').
+                """
+                import pandas as pd
+
+                # 1. Parse "s1-eth1" -> dpid=1, port=1
+                try:
+                    clean_id = link_id.replace('s', '')
+                    parts = clean_id.split('-eth')
+                    dpid = int(parts[0])
+                    port_no = int(parts[1])
+                except Exception:
+                    return pd.DataFrame()
+
+                # 2. Use the connection context to read into Pandas
+                with self._get_connection() as conn:
+                    query = '''
+                        SELECT tx_bytes, timestamp 
+                        FROM traffic_stats 
+                        WHERE dpid = ? AND port_no = ? 
+                        ORDER BY timestamp DESC 
+                        LIMIT ?
+                    '''
+                    # Fetch 2x the duration to ensure we have enough data points (approx 1 per sec)
+                    df = pd.read_sql_query(query, conn, params=(dpid, port_no, duration_seconds * 2))
+
+                # 3. Rename and Sort (Post-processing)
+                if not df.empty:
+                    df = df.rename(columns={'tx_bytes': 'bytes_sent'})
+                    df = df.sort_values('timestamp', ascending=True)
+
+                return df
 
 # Singleton instance
 _db_instance = None

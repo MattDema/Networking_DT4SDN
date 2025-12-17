@@ -34,16 +34,15 @@ CREATE TABLE IF NOT EXISTS hosts (
     last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- ML Predictions (for validation)
+-- ML Predictions (Fixed)
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     dpid INTEGER NOT NULL,
-    predicted_packets INTEGER,
-    predicted_bytes INTEGER,
-    actual_packets INTEGER,             -- Filled later for validation
-    actual_bytes INTEGER,
-    prediction_horizon INTEGER          -- Seconds into future (30, 60)
+    port_no INTEGER NOT NULL,           -- <--- ADDED THIS
+    predicted_bytes REAL,               -- Changed to REAL for ML precision
+    actual_bytes REAL,
+    prediction_horizon INTEGER DEFAULT 5
 );
 
 -- Indexes for faster queries
