@@ -121,7 +121,7 @@ class TrafficPredictor:
         # We fetch a bit more than needed (e.g. 5 mins) to be safe
         history = db_manager.get_traffic_history(
             dpid=dpid,
-            minutes=2 
+            minutes=5 
         )
         
         if not history:

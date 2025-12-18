@@ -136,9 +136,41 @@ DASHBOARD_HTML = """
 
         .grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+            grid-template-columns: 1fr; 
             gap: 20px; 
             margin-bottom: 20px;
+        }
+
+        /* New Layout Classes */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .top-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1100px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
         }
 
         .card { 
@@ -381,80 +413,93 @@ DASHBOARD_HTML = """
         </div>
     </div>
 
-    <div class="grid">
-        <!-- Connection Status -->
-        <div class="card">
-            <h3>📡 Connection</h3>
-            <p>Physical Twin: <strong>{{ pt_ip }}</strong></p>
-            <p>Status: <span class="status-{{ 'connected' if connection_status == 'Connected' else 'disconnected' }}">
-                {{ connection_status }}
-            </span></p>
-        </div>
-
-        <!-- Switch Count -->
-        <div class="card">
-            <h3>🔀 Switches</h3>
-            <div class="stat-value">{{ switches|length }}</div>
-            <div class="stat-label">Active OpenFlow Switches</div>
-        </div>
-
-        <!-- AI Prediction -->
-        <div class="card">
-            <h3>🔮 AI Link Forecast (Next 30s)</h3>
-            {% if predictions %}
-                <div class="traffic-grid">
-                    {% for key, data in predictions.items() %}
-                    <div class="traffic-card traffic-{{ data.level }}">
-                        <div class="traffic-key">{{ key }}</div>
-                        <div class="traffic-value">{{ data.value }}</div>
-                        <div class="traffic-status">{{ data.status }}</div>
-                    </div>
-                    {% endfor %}
+    <div class="main-layout">
+        <!-- Left Column: Database (1/3) -->
+        <div class="sidebar">
+            <div class="card" style="height: 100%;">
+                <h3>🗄️ Database Storage</h3>
+                <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 12px;">
+                    SQLite storage for historical data and real-time monitoring.
+                </p>
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 8px;">Table</th>
+                            <th style="padding: 8px;">Entries</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding: 8px;"><code>traffic_stats</code></td>
+                            <td style="padding: 8px;"><strong>{{ db_stats.traffic_stats }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;"><code>flow_stats</code></td>
+                            <td style="padding: 8px;"><strong>{{ db_stats.flow_stats }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;"><code>hosts</code></td>
+                            <td style="padding: 8px;"><strong>{{ db_stats.hosts }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;"><code>predictions</code></td>
+                            <td style="padding: 8px;"><strong>{{ db_stats.predictions }}</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="margin-top: 20px; font-size: 0.8em; color: var(--text-secondary); line-height: 1.4;">
+                    <p>• <b>Traffic:</b> Port metrics used for ML training.</p>
+                    <p>• <b>Flows:</b> Snapshots of active OpenFlow rules.</p>
+                    <p>• <b>Hosts:</b> Inventory of discovered devices.</p>
+                    <p>• <b>Predictions:</b> ML-generated traffic forecasts.</p>
                 </div>
-            {% else %}
-                <div class="stat-label">Waiting for traffic data...</div>
-            {% endif %}
+            </div>
         </div>
 
-        <!-- Database -->
-        <div class="card">
-            <h3>🗄️ Database Storage</h3>
-            <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 12px;">
-                The Digital Twin uses a SQLite database to store historical data for ML training and real-time monitoring.
-            </p>
-            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-                <thead>
-                    <tr>
-                        <th style="width: 30%;">Table Name</th>
-                        <th style="width: 20%;">Entries</th>
-                        <th>Description & Purpose</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>traffic_stats</code></td>
-                        <td><strong>{{ db_stats.traffic_stats }}</strong></td>
-                        <td>Historical port-level metrics (Bytes/Packets) used for ML training.</td>
-                    </tr>
-                    <tr>
-                        <td><code>flow_stats</code></td>
-                        <td><strong>{{ db_stats.flow_stats }}</strong></td>
-                        <td>Snapshots of active OpenFlow rules and match criteria on switches.</td>
-                    </tr>
-                    <tr>
-                        <td><code>hosts</code></td>
-                        <td><strong>{{ db_stats.hosts }}</strong></td>
-                        <td>Inventory of discovered network devices, IPs, and MAC addresses.</td>
-                    </tr>
-                    <tr>
-                        <td><code>predictions</code></td>
-                        <td><strong>{{ db_stats.predictions }}</strong></td>
-                        <td>ML-generated forecasts for future traffic load per port.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <!-- Right Column: Connection, Switches, Forecast (2/3) -->
+        <div class="main-content">
+            <div class="top-row">
+                <!-- Connection Status -->
+                <div class="card">
+                    <h3>📡 Connection</h3>
+                    <p style="margin: 5px 0; font-size: 0.9em;">PT: <strong>{{ pt_ip }}</strong></p>
+                    <p style="margin: 5px 0; font-size: 0.9em;">Status: <span class="status-{{ 'connected' if connection_status == 'Connected' else 'disconnected' }}">
+                        {{ connection_status }}
+                    </span></p>
+                </div>
 
+                <!-- Switch Count -->
+                <div class="card">
+                    <h3>🔀 Switches</h3>
+                    <div style="display: flex; align-items: baseline; gap: 10px;">
+                        <div class="stat-value" style="font-size: 28px;">{{ switches|length }}</div>
+                        <div class="stat-label">Active Nodes</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Prediction -->
+            <div class="card" style="flex-grow: 1;">
+                <h3>🔮 AI Link Forecast (Next 30s)</h3>
+                {% if predictions %}
+                    <div class="traffic-grid">
+                        {% for key, data in predictions.items() %}
+                        <div class="traffic-card traffic-{{ data.level }}">
+                            <div class="traffic-key">{{ key }}</div>
+                            <div class="traffic-value" style="font-size: 1.2em;">{{ data.value }}</div>
+                            <div class="traffic-status">{{ data.status }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="stat-label" style="padding: 20px; text-align: center;">Waiting for traffic data to generate forecasts...</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Width Sections -->
+    <div class="grid">
         <!-- Network Topology -->
         <div class="card full-width">
             <h3>🖧 Network Topology</h3>
