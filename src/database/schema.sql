@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     dpid INTEGER NOT NULL,
+    port INTEGER,                       
     predicted_packets INTEGER,
     predicted_bytes INTEGER,
     actual_packets INTEGER,             -- Filled later for validation

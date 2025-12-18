@@ -146,6 +146,7 @@ def run_prediction_loop():
                             
                             db.save_prediction(
                                 dpid=dpid,
+                                port=port_no,  # <--- AGGIUNTO IL PARAMETRO PORTA
                                 predicted_packets=0,
                                 predicted_bytes=int(predicted_val),
                                 horizon=predictor.prediction_horizon

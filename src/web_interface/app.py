@@ -321,9 +321,19 @@ DASHBOARD_HTML = """
 
         <!-- AI Prediction -->
         <div class="card">
-            <h3>🔮 AI Forecast</h3>
-            <div class="stat-value">{{ prediction_stats.value }}</div>
-            <div class="stat-label">{{ prediction_stats.label }}</div>
+            <h3>🔮 AI Link Forecast</h3>
+            {% if predictions %}
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    {% for key, data in predictions.items() %}
+                    <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; text-align: center;">
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">{{ key }}</div>
+                        <div style="font-weight: bold; color: var(--accent);">{{ data.value }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="stat-label">Waiting for traffic data...</div>
+            {% endif %}
         </div>
 
         <!-- Database -->
@@ -524,24 +534,33 @@ def index():
         db = get_db()
         db_stats_data = db.get_db_stats()
         
-        # Get latest prediction
-        pred_val = "N/A"
-        pred_label = "No Model Loaded"
-        
-        # Try to fetch latest prediction from DB
+        # Get latest predictions per port
+        predictions = {}
         with db._get_connection() as conn:
-            row = conn.execute('SELECT predicted_bytes, timestamp FROM predictions ORDER BY id DESC LIMIT 1').fetchone()
-            if row:
-                pred_val = f"{row['predicted_bytes'] / 1000:.1f} KB"
-                pred_label = f"Predicted for next window"
-            else:
-                pred_label = "Waiting for data..."
-                
-        prediction_stats = {'value': pred_val, 'label': pred_label}
+            # Get the latest prediction for each dpid/port pair
+            # We use a subquery to find the max ID for each group
+            rows = conn.execute('''
+                SELECT dpid, port, predicted_bytes, timestamp 
+                FROM predictions p1
+                WHERE id = (
+                    SELECT MAX(id) 
+                    FROM predictions p2 
+                    WHERE p2.dpid = p1.dpid AND p2.port = p1.port
+                )
+                ORDER BY dpid, port
+            ''').fetchall()
+            
+            for row in rows:
+                key = f"s{row['dpid']}:p{row['port']}"
+                predictions[key] = {
+                    'value': f"{row['predicted_bytes'] / 1000:.1f} KB",
+                    'timestamp': row['timestamp']
+                }
         
-    except:
+    except Exception as e:
+        print(f"DB Error: {e}")
         db_stats_data = {'traffic_stats': 0, 'flow_stats': 0, 'hosts': 0}
-        prediction_stats = {'value': 'N/A', 'label': 'DB Error'}
+        predictions = {}
 
     return render_template_string(
         DASHBOARD_HTML,
@@ -551,7 +570,7 @@ def index():
         flows=flows,
         connection_status=status,
         db_stats=db_stats_data,
-        prediction_stats=prediction_stats
+        predictions=predictions  # Pass the dict instead of single stats
     )
 
 
