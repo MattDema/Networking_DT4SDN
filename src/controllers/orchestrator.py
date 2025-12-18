@@ -112,7 +112,8 @@ def run_prediction_loop():
             switches = get_active_switches()
             
             if not switches:
-                print("⏳ [Predictor] No switches found yet...")
+                # print("⏳ [Predictor] No switches found yet...") # Uncomment if needed
+                pass
             
             for dpid in switches:
                 try:
@@ -125,8 +126,8 @@ def run_prediction_loop():
                         if port_no == 'LOCAL': continue 
                         
                         try:
-                            # DEBUG: Print what we are trying to do
-                            # print(f"🔍 [Predictor] Analyzing s{dpid}:p{port_no}...")
+                            # DEBUG: Print status
+                            # print(f"🔍 [Predictor] Checking s{dpid}:p{port_no}...")
 
                             result = predictor.predict_next_frame(dpid, port_no, db)
                             
@@ -148,9 +149,9 @@ def run_prediction_loop():
                             print(f"🔮 [ML] s{dpid}:p{port_no} -> Predicted {predicted_val:.0f} bytes")
                             
                         except ValueError as ve:
-                            # This is normal during startup (first 60s)
-                            # Uncomment next line to see "Insufficient data" messages
-                            # print(f"⏳ [Predictor] Waiting for data s{dpid}:p{port_no}: {ve}")
+                            # Print WHY it failed (e.g. "Need 90 samples, got 45")
+                            # This is the most important debug line right now:
+                            print(f"⏳ [Predictor] s{dpid}:p{port_no} - {ve}")
                             pass
                         except Exception as e:
                             print(f"⚠ [Predictor] Error on s{dpid}:p{port_no}: {e}")
