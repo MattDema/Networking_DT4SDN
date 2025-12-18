@@ -21,9 +21,8 @@ except ImportError as e:
     ML_AVAILABLE = False
 
 # --- CONFIGURATION ---
-# CRITICAL: Set to 1s to match the ML model's training resolution (60 samples = 60 seconds)
 COLLECTION_INTERVAL = 1  
-PREDICTION_INTERVAL = 5  # Predict every 5 seconds (inference is fast, but no need to spam)
+PREDICTION_INTERVAL = 5
 MODEL_PATH = os.path.join(src_dir, 'ml_models', 'congestion_ultimate.pt')
 SCALER_PATH = os.path.join(src_dir, 'ml_models', 'scaler.pkl')
 
@@ -36,11 +35,15 @@ def collect_data_periodically():
     while True:
         try:
             switches = get_active_switches()
+            if not switches:
+                # print("... waiting for switches ...")
+                pass
+
             for dpid in switches:
                 # Collect Port Stats
                 try:
                     url = f"{RYU_API_URL}/stats/port/{dpid}"
-                    resp = requests.get(url, timeout=0.5) # Lower timeout for faster polling
+                    resp = requests.get(url, timeout=0.5)
                     ports = resp.json().get(str(dpid), [])
                     for port in ports:
                         db.save_port_stats(
@@ -106,29 +109,28 @@ def run_prediction_loop():
 
     while True:
         try:
-            # 1. Get active switches
             switches = get_active_switches()
-
+            
+            if not switches:
+                print("⏳ [Predictor] No switches found yet...")
+            
             for dpid in switches:
-                # 2. Get active ports for this switch
                 try:
                     url = f"{RYU_API_URL}/stats/port/{dpid}"
                     resp = requests.get(url, timeout=1)
                     ports = resp.json().get(str(dpid), [])
                     
-                    # 3. Predict for each active port
                     for port_info in ports:
                         port_no = port_info.get('port_no')
                         if port_no == 'LOCAL': continue 
                         
                         try:
-                            # Delegate data fetching and prep to the predictor
-                            # It will fetch the last 60 samples (which now equals 60 seconds)
+                            # DEBUG: Print what we are trying to do
+                            # print(f"🔍 [Predictor] Analyzing s{dpid}:p{port_no}...")
+
                             result = predictor.predict_next_frame(dpid, port_no, db)
                             
-                            # Extract prediction
                             prediction = result['predictions']
-                            # Handle scalar or array output
                             if hasattr(prediction, 'item'):
                                 predicted_val = prediction.item()
                             elif hasattr(prediction, '__iter__'):
@@ -136,7 +138,6 @@ def run_prediction_loop():
                             else:
                                 predicted_val = float(prediction)
                             
-                            # Save to DB
                             db.save_prediction(
                                 dpid=dpid,
                                 predicted_packets=0,
@@ -144,17 +145,18 @@ def run_prediction_loop():
                                 horizon=predictor.prediction_horizon
                             )
                             
-                            # print(f"🔮 [ML] s{dpid}:p{port_no} -> Predicted {predicted_val:.0f} bytes")
+                            print(f"🔮 [ML] s{dpid}:p{port_no} -> Predicted {predicted_val:.0f} bytes")
                             
-                        except ValueError:
-                            # Not enough history yet (need 60s of data), skip silently
+                        except ValueError as ve:
+                            # This is normal during startup (first 60s)
+                            # Uncomment next line to see "Insufficient data" messages
+                            # print(f"⏳ [Predictor] Waiting for data s{dpid}:p{port_no}: {ve}")
                             pass
                         except Exception as e:
-                            # print(f"⚠ [Predictor] Error on s{dpid}:p{port_no}: {e}")
-                            pass
+                            print(f"⚠ [Predictor] Error on s{dpid}:p{port_no}: {e}")
                             
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"⚠ [Predictor] Failed to fetch ports for s{dpid}: {e}")
 
         except Exception as e:
             print(f"⚠ [Predictor] Loop Error: {e}")
