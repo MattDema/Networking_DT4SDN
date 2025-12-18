@@ -3,6 +3,7 @@ import sys
 import time
 import threading
 import requests
+import numpy as np # Added numpy import for robust type checking
 
 # 1. Setup paths to import modules from sibling directories
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -36,7 +37,6 @@ def collect_data_periodically():
         try:
             switches = get_active_switches()
             if not switches:
-                # print("... waiting for switches ...")
                 pass
 
             for dpid in switches:
@@ -112,7 +112,6 @@ def run_prediction_loop():
             switches = get_active_switches()
             
             if not switches:
-                # print("⏳ [Predictor] No switches found yet...") # Uncomment if needed
                 pass
             
             for dpid in switches:
@@ -126,18 +125,23 @@ def run_prediction_loop():
                         if port_no == 'LOCAL': continue 
                         
                         try:
-                            # DEBUG: Print status
-                            # print(f"🔍 [Predictor] Checking s{dpid}:p{port_no}...")
-
                             result = predictor.predict_next_frame(dpid, port_no, db)
                             
                             prediction = result['predictions']
-                            if hasattr(prediction, 'item'):
-                                predicted_val = prediction.item()
-                            elif hasattr(prediction, '__iter__'):
-                                predicted_val = float(prediction[0])
-                            else:
+                            
+                            # --- ROBUST CONVERSION LOGIC ---
+                            if isinstance(prediction, (int, float)):
                                 predicted_val = float(prediction)
+                            elif isinstance(prediction, np.ndarray):
+                                if prediction.size == 1:
+                                    predicted_val = float(prediction.item())
+                                else:
+                                    # If model returns multiple steps, take the first one
+                                    predicted_val = float(prediction.flatten()[0])
+                            else:
+                                # Fallback for tensors or other types
+                                predicted_val = float(prediction)
+                            # -------------------------------
                             
                             db.save_prediction(
                                 dpid=dpid,
@@ -149,8 +153,6 @@ def run_prediction_loop():
                             print(f"🔮 [ML] s{dpid}:p{port_no} -> Predicted {predicted_val:.0f} bytes")
                             
                         except ValueError as ve:
-                            # Print WHY it failed (e.g. "Need 90 samples, got 45")
-                            # This is the most important debug line right now:
                             print(f"⏳ [Predictor] s{dpid}:p{port_no} - {ve}")
                             pass
                         except Exception as e:
