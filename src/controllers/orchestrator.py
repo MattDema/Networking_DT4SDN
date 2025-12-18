@@ -25,7 +25,8 @@ except ImportError as e:
 COLLECTION_INTERVAL = 1  
 PREDICTION_INTERVAL = 5
 MODEL_PATH = os.path.join(src_dir, 'ml_models', 'congestion_ultimate.pt')
-SCALER_PATH = os.path.join(src_dir, 'ml_models', 'scaler.pkl')
+# FIX: Update scaler filename
+SCALER_PATH = os.path.join(src_dir, 'ml_models', 'congestion_ultimate_scaler.pkl')
 
 
 def collect_data_periodically():
