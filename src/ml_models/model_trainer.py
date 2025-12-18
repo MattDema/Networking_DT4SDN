@@ -260,39 +260,39 @@ class TrafficModelTrainer:
         print(f"  Total parameters: {total_params:,}")
         print("✓ Model built successfully")
     
-    def train(self, epochs: int = 50, batch_size: int = 32, 
+    def train(self, epochs: int = 50, batch_size: int = 32,
               validation_split: float = 0.1, learning_rate: float = 0.0001):
         """Train the model"""
         if self.model is None:
             raise ValueError("Model not built. Call build_model() first.")
-        
+       
         print(f"\nStarting training for {epochs} epochs...")
-        
+       
         # Split validation data
         val_size = int(len(self.X_train) * validation_split)
         X_train_split = self.X_train[:-val_size]
         y_train_split = self.y_train[:-val_size]
         X_val = self.X_train[-val_size:]
         y_val = self.y_train[-val_size:]
-        
+       
         # Create data loaders
         train_dataset = TrafficDataset(X_train_split, y_train_split)
         val_dataset = TrafficDataset(X_val, y_val)
-        
+       
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size)
-        
+       
         # Loss and optimizer
         criterion = nn.MSELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode='min', factor=0.5, patience=5
         )
-        
+       
         best_val_loss = float('inf')
         patience_counter = 0
         patience = 300 # Number of epochs to wait before early stopping
-        
+       
         # Training loop
         for epoch in range(epochs):
             # Train
@@ -301,18 +301,18 @@ class TrafficModelTrainer:
             for X_batch, y_batch in train_loader:
                 X_batch = X_batch.to(self.device)
                 y_batch = y_batch.to(self.device)
-                
+               
                 optimizer.zero_grad()
                 predictions = self.model(X_batch)
                 loss = criterion(predictions, y_batch)
                 loss.backward()
                 optimizer.step()
-                
+               
                 train_loss += loss.item()
-            
+           
             train_loss /= len(train_loader)
             self.train_losses.append(train_loss)
-            
+           
             # Validate
             self.model.eval()
             val_loss = 0
@@ -320,31 +320,33 @@ class TrafficModelTrainer:
                 for X_batch, y_batch in val_loader:
                     X_batch = X_batch.to(self.device)
                     y_batch = y_batch.to(self.device)
-                    
+                   
                     predictions = self.model(X_batch)
                     loss = criterion(predictions, y_batch)
                     val_loss += loss.item()
-            
+           
             val_loss /= len(val_loader)
             self.val_losses.append(val_loss)
-            
+           
             # Learning rate scheduler
             scheduler.step(val_loss)
 
-            #Explicit Messages 
+
+            #Explicit Messages
             # Learning rate scheduler
             old_lr = optimizer.param_groups[0]['lr']
             scheduler.step(val_loss)
             new_lr = optimizer.param_groups[0]['lr']
 
+
             # Print if learning rate changed
             if new_lr != old_lr:
                 print(f"  → Learning rate reduced from {old_lr:.6f} to {new_lr:.6f}")
-            
+           
             # Print progress
             if (epoch + 1) % 5 == 0:
                 print(f"Epoch [{epoch+1}/{epochs}] - Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}")
-            
+           
             # Early stopping
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -356,10 +358,146 @@ class TrafficModelTrainer:
                 if patience_counter >= patience:
                     print(f"\nEarly stopping at epoch {epoch+1}")
                     break
-        
+       
         # Restore best model
         self.model.load_state_dict(self.best_model_state)
         print("✓ Training complete")
+
+    # def train(self, epochs: int = 50, batch_size: int = 32, 
+    #       validation_split: float = 0.1, learning_rate: float = 0.0001,
+    #       use_mixed_precision: bool = True):
+    #     """
+    #     Train the model with optional Mixed Precision (FP16) for A100
+    
+    #     Args:
+    #         use_mixed_precision: Enable FP16 training (50-60% speedup on A100)
+    #     """
+    #     if self.model is None:
+    #         raise ValueError("Model not built. Call build_model() first.")
+    
+    #     print(f"\nStarting training for {epochs} epochs...")
+    
+    #     # Split validation data
+    #     val_size = int(len(self.X_train) * validation_split)
+    #     X_train_split = self.X_train[:-val_size]
+    #     y_train_split = self.y_train[:-val_size]
+    #     X_val = self.X_train[-val_size:]
+    #     y_val = self.y_train[-val_size:]
+    
+    #     # Create data loaders
+    #     train_dataset = TrafficDataset(X_train_split, y_train_split)
+    #     val_dataset = TrafficDataset(X_val, y_val)
+    
+    #     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
+    #     val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=2, pin_memory=True)
+    
+    #     # Loss and optimizer
+    #     criterion = nn.MSELoss()
+    #     optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+    #     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+    #         optimizer, mode='min', factor=0.5, patience=10
+    #     )
+    
+    #     # Mixed Precision Setup (A100 optimization!)
+    #     scaler = None
+    #     if use_mixed_precision and torch.cuda.is_available():
+    #         from torch.amp import GradScaler, autocast
+    #         scaler = GradScaler('cuda')
+    #         print("  Mixed Precision (FP16) ENABLED - expect 50-60% speedup!")
+    
+    #     best_val_loss = float('inf')
+    #     patience_counter = 0
+    #     patience = 300  # Will be overridden by config
+    
+    #     # Training loop
+    #     for epoch in range(epochs):
+    #         # Train
+    #         self.model.train()
+    #         train_loss = 0
+        
+    #         for X_batch, y_batch in train_loader:
+    #             X_batch = X_batch.to(self.device, non_blocking=True)
+    #             y_batch = y_batch.to(self.device, non_blocking=True)
+            
+    #             optimizer.zero_grad()
+            
+    #             if scaler:
+    #                 # MIXED PRECISION TRAINING (A100 optimized!)
+    #                 with autocast('cuda'):
+    #                     predictions = self.model(X_batch)
+    #                     loss = criterion(predictions, y_batch)
+                    
+    #                 # Backward with gradient scaling
+    #                 scaler.scale(loss).backward()
+                    
+    #                 # Gradient clipping (prevent exploding gradients)
+    #                 scaler.unscale_(optimizer)
+    #                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    
+    #                 scaler.step(optimizer)
+    #                 scaler.update()
+    #             else:
+    #                 # Regular FP32 training
+    #                 predictions = self.model(X_batch)
+    #                 loss = criterion(predictions, y_batch)
+    #                 loss.backward()
+    #                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+    #                 optimizer.step()
+                
+    #             train_loss += loss.item()
+            
+    #         train_loss /= len(train_loader)
+    #         self.train_losses.append(train_loss)
+            
+    #         # Validate
+    #         self.model.eval()
+    #         val_loss = 0
+    #         with torch.no_grad():
+    #             for X_batch, y_batch in val_loader:
+    #                 X_batch = X_batch.to(self.device, non_blocking=True)
+    #                 y_batch = y_batch.to(self.device, non_blocking=True)
+                    
+    #                 if scaler:
+    #                     with autocast('cuda'):
+    #                         predictions = self.model(X_batch)
+    #                         loss = criterion(predictions, y_batch)
+    #                 else:
+    #                     predictions = self.model(X_batch)
+    #                     loss = criterion(predictions, y_batch)
+                    
+    #                 val_loss += loss.item()
+            
+    #         val_loss /= len(val_loader)
+    #         self.val_losses.append(val_loss)
+            
+    #         # Learning rate scheduler
+    #         old_lr = optimizer.param_groups[0]['lr']
+    #         scheduler.step(val_loss)
+    #         new_lr = optimizer.param_groups[0]['lr']
+            
+    #         # Print if learning rate changed
+    #         if new_lr != old_lr:
+    #             print(f"  → Learning rate reduced from {old_lr:.6f} to {new_lr:.6f}")
+            
+    #         # Print progress
+    #         if (epoch + 1) % 5 == 0:
+    #             print(f"Epoch [{epoch+1}/{epochs}] - Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}")
+            
+    #         # Early stopping
+    #         if val_loss < best_val_loss:
+    #             best_val_loss = val_loss
+    #             patience_counter = 0
+    #             # Save best model
+    #             self.best_model_state = self.model.state_dict()
+    #         else:
+    #             patience_counter += 1
+    #             if patience_counter >= patience:
+    #                 print(f"\nEarly stopping at epoch {epoch+1}")
+    #                 break
+        
+    #     # Restore best model
+    #     self.model.load_state_dict(self.best_model_state)
+    #     print("✓ Training complete")
     
     def evaluate(self) -> dict:
         """Evaluate model on test set"""

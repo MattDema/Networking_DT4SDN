@@ -22,6 +22,12 @@ docs/previous/
 # Models
 models/
 
+# Tests
+tests/
+
+# Visuals
+visuals/
+
 # IDE
 .vscode/
 .idea/
