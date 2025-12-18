@@ -109,33 +109,53 @@ class TrafficPredictor:
         
         return predictions
     
-    def predict_next_frame(self, link_id: str, db_manager) -> dict:
+    def predict_next_frame(self, dpid: int, port_no: int, db_manager) -> dict:
         """
-        Predict traffic for next frame given a link ID
-        Fetches recent data from database automatically
+        Predict traffic for next frame given a switch port.
+        Fetches recent data from database automatically.
         """
         import time
+        import pandas as pd
         
-        # Fetch last N seconds of data for this link
-        historical_data = db_manager.get_recent_traffic(
-            link_id=link_id,
-            duration_seconds=self.sequence_length
+        # Fetch last N minutes of data to ensure we have enough points
+        # We fetch a bit more than needed (e.g. 5 mins) to be safe
+        history = db_manager.get_traffic_history(
+            dpid=dpid,
+            minutes=5 
         )
         
-        if len(historical_data) < self.sequence_length:
+        if not history:
+             raise ValueError(f"No history found for s{dpid}")
+
+        # Convert to DataFrame
+        df = pd.DataFrame(history)
+        
+        # Filter for specific port
+        port_data = df[df['port_no'] == port_no].sort_values('timestamp')
+        
+        if port_data.empty:
+            raise ValueError(f"No history found for s{dpid}:p{port_no}")
+
+        # Calculate bandwidth (bytes sent per interval)
+        # The DB stores cumulative counters, so we need the difference
+        port_data['bytes_sent'] = port_data['tx_bytes'].diff().fillna(0)
+        
+        # Check if we have enough data
+        if len(port_data) < self.sequence_length:
             raise ValueError(
-                f"Insufficient historical data for {link_id}. "
-                f"Need {self.sequence_length} samples, got {len(historical_data)}"
+                f"Insufficient historical data for s{dpid}:p{port_no}. "
+                f"Need {self.sequence_length} samples, got {len(port_data)}"
             )
         
-        # Extract traffic values
-        traffic_values = historical_data['bytes_sent'].values
+        # Extract the exact sequence needed for the model (last N samples)
+        input_data = port_data['bytes_sent'].values[-self.sequence_length:]
         
         # Make prediction
-        predictions = self.predict(traffic_values)
+        predictions = self.predict(input_data)
         
         return {
-            'link_id': link_id,
+            'dpid': dpid,
+            'port_no': port_no,
             'predictions': predictions,
             'timestamp': time.time(),
             'horizon_seconds': self.prediction_horizon

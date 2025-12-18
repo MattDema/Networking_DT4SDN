@@ -11,7 +11,9 @@ __pycache__/
 dist/
 build/
 
+
 # Data files
+data/digital_twin.db
 data/training/*
 data/logs/*
 !data/**/.gitkeep
@@ -43,7 +45,6 @@ Thumbs.db
 
 # ML models (large files)
 *.h5
-*.pkl
 *.pth
 
 # Database
