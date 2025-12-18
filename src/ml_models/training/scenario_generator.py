@@ -59,58 +59,106 @@ class TrafficScenarioGenerator:
 
     #     return np.array(traffic) """
 
-    def generate_normal_traffic(self, base_rate: int = 2000, variation: float = 0.3) -> np.ndarray:
+    # def generate_normal_traffic(self, base_rate: int = 2000, variation: float = 0.3) -> np.ndarray:
+    #     """
+    #     Realistic normal traffic with:
+    #     - Daily patterns (morning/evening peaks)
+    #     - Weekly patterns (weekday vs weekend)
+    #     - Random walk trends
+    #     - Micro-bursts
+    #     """
+    #     traffic = []
+    
+    #     # Add slow trending (traffic grows/shrinks over hours)
+    #     trend = 0
+    #     trend_change_rate = 0.0001
+    
+    #     for t in self.timestamps:
+    #         # Time-based patterns
+    #         hour = (t / 3600) % 24
+    #         day = int(t / 86400) % 7
+        
+    #         # Daily pattern (business hours)
+    #         if 6 <= hour <= 9:  # Morning ramp-up
+    #             time_multiplier = 0.7 + (hour - 6) * 0.15
+    #         elif 9 <= hour <= 17:  # Peak hours
+    #             time_multiplier = 1.2 + np.random.uniform(-0.1, 0.1)
+    #         elif 17 <= hour <= 20:  # Evening decline
+    #             time_multiplier = 1.1 - (hour - 17) * 0.1
+    #         else:  # Night
+    #             time_multiplier = 0.5 + np.random.uniform(-0.1, 0.1)
+        
+    #         # Weekly pattern (weekday vs weekend)
+    #         if day >= 5:  # Weekend
+    #             time_multiplier *= 0.6
+        
+    #         # Add trending behavior
+    #         trend += np.random.uniform(-trend_change_rate, trend_change_rate)
+    #         trend = np.clip(trend, -0.3, 0.3)
+        
+    #         # Base traffic with all patterns
+    #         base = base_rate * (1 + trend) * time_multiplier
+        
+    #         # Add noise
+    #         noise = np.random.normal(0, base * variation)
+        
+    #         # Random micro-bursts (5% chance)
+    #         if np.random.random() < 0.05:
+    #             noise += base * np.random.uniform(0.3, 0.8)
+        
+    #         value = base + noise
+    #         traffic.append(max(100, value))  # Minimum 100 bytes
+    
+    #     return np.array(traffic)
+    
+    def generate_normal_traffic(self, base_rate: int = 2000, 
+                            variation: float = 0.2) -> np.ndarray:
         """
-        Realistic normal traffic with:
-        - Daily patterns (morning/evening peaks)
-        - Weekly patterns (weekday vs weekend)
-        - Random walk trends
-        - Micro-bursts
+        Normal traffic with AUTOCORRELATION (realistic temporal patterns)
+        Current traffic depends on previous traffic
         """
         traffic = []
     
-        # Add slow trending (traffic grows/shrinks over hours)
-        trend = 0
-        trend_change_rate = 0.0001
+        # Start with base value
+        current_value = base_rate
+    
+        # Autocorrelation parameters
+        momentum = 0.85  # How much current value depends on previous (0.85 = 85%)
+        noise_scale = base_rate * variation
     
         for t in self.timestamps:
             # Time-based patterns
             hour = (t / 3600) % 24
-            day = int(t / 86400) % 7
         
             # Daily pattern (business hours)
-            if 6 <= hour <= 9:  # Morning ramp-up
-                time_multiplier = 0.7 + (hour - 6) * 0.15
-            elif 9 <= hour <= 17:  # Peak hours
-                time_multiplier = 1.2 + np.random.uniform(-0.1, 0.1)
-            elif 17 <= hour <= 20:  # Evening decline
-                time_multiplier = 1.1 - (hour - 17) * 0.1
+            if 6 <= hour < 9:  # Morning ramp-up
+                target_multiplier = 0.6 + (hour - 6) / 3 * 0.6  # 0.6 → 1.2
+            elif 9 <= hour < 17:  # Peak hours
+                target_multiplier = 1.2
+            elif 17 <= hour < 22:  # Evening decline
+                target_multiplier = 1.2 - (hour - 17) / 5 * 0.6  # 1.2 → 0.6
             else:  # Night
-                time_multiplier = 0.5 + np.random.uniform(-0.1, 0.1)
+                target_multiplier = 0.5
         
-            # Weekly pattern (weekday vs weekend)
-            if day >= 5:  # Weekend
-                time_multiplier *= 0.6
+            target_value = base_rate * target_multiplier
         
-            # Add trending behavior
-            trend += np.random.uniform(-trend_change_rate, trend_change_rate)
-            trend = np.clip(trend, -0.3, 0.3)
+            # AUTOCORRELATION: New value depends on previous value
+            # This creates smooth transitions instead of random jumps
+            current_value = (momentum * current_value + 
+                            (1 - momentum) * target_value)
         
-            # Base traffic with all patterns
-            base = base_rate * (1 + trend) * time_multiplier
+            # Add small noise
+            noise = np.random.normal(0, noise_scale * 0.3)
         
-            # Add noise
-            noise = np.random.normal(0, base * variation)
+            # Occasional micro-bursts (but not too random)
+            if np.random.random() < 0.02:  # 2% chance
+                noise += noise_scale * 0.5
         
-            # Random micro-bursts (5% chance)
-            if np.random.random() < 0.05:
-                noise += base * np.random.uniform(0.3, 0.8)
-        
-            value = base + noise
-            traffic.append(max(100, value))  # Minimum 100 bytes
+            final_value = current_value + noise
+            traffic.append(max(100, final_value))
     
         return np.array(traffic)
-    
+
     def generate_burst_traffic(self, base_rate: int = 2000,
                                num_bursts: int = 5,
                                burst_multiplier: float = 5.0) -> np.ndarray:
