@@ -418,28 +418,41 @@ DASHBOARD_HTML = """
 
         <!-- Database -->
         <div class="card">
-            <h3>🗄️ Database
-                <span
-                    class="info-inline"
-                    title="Traffic: righe in 'traffic_stats' (snapshot porte). Flows: righe in 'flow_stats' (snapshot flow entries). Hosts: righe in 'hosts' (MAC unici)."
-                    onclick="alert('Traffic: numero di snapshot delle statistiche delle porte salvati in \\ntraffic_stats (una riga per porta per ogni raccolta).\\n\\nFlows: snapshot delle flow entries salvate in \\nflow_stats (una riga per ogni flow per ogni raccolta).\\n\\nHosts: host scoperti salvati in \\nhosts (un record per MAC, aggiornato su ogni discovery).')"
-                    style="cursor: pointer; margin-left: 8px; font-size: 14px; color: var(--text-secondary); padding: 2px 6px; border-radius: 12px; border: 1px solid var(--border); background: rgba(0,0,0,0.03);"
-                >ⓘ</span>
-            </h3>
-            <div class="db-stats">
-                <div class="db-stat">
-                    <div class="db-stat-value">{{ db_stats.traffic_stats }}</div>
-                    <div class="db-stat-label">Traffic</div>
-                </div>
-                <div class="db-stat">
-                    <div class="db-stat-value">{{ db_stats.flow_stats }}</div>
-                    <div class="db-stat-label">Flows</div>
-                </div>
-                <div class="db-stat">
-                    <div class="db-stat-value">{{ db_stats.hosts }}</div>
-                    <div class="db-stat-label">Hosts</div>
-                </div>
-            </div>
+            <h3>🗄️ Database Storage</h3>
+            <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 12px;">
+                The Digital Twin uses a SQLite database to store historical data for ML training and real-time monitoring.
+            </p>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Table Name</th>
+                        <th style="width: 20%;">Entries</th>
+                        <th>Description & Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>traffic_stats</code></td>
+                        <td><strong>{{ db_stats.traffic_stats }}</strong></td>
+                        <td>Historical port-level metrics (Bytes/Packets) used for ML training.</td>
+                    </tr>
+                    <tr>
+                        <td><code>flow_stats</code></td>
+                        <td><strong>{{ db_stats.flow_stats }}</strong></td>
+                        <td>Snapshots of active OpenFlow rules and match criteria on switches.</td>
+                    </tr>
+                    <tr>
+                        <td><code>hosts</code></td>
+                        <td><strong>{{ db_stats.hosts }}</strong></td>
+                        <td>Inventory of discovered network devices, IPs, and MAC addresses.</td>
+                    </tr>
+                    <tr>
+                        <td><code>predictions</code></td>
+                        <td><strong>{{ db_stats.predictions }}</strong></td>
+                        <td>ML-generated forecasts for future traffic load per port.</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- Network Topology -->
@@ -674,7 +687,7 @@ def index():
         
     except Exception as e:
         print(f"DB Error: {e}")
-        db_stats_data = {'traffic_stats': 0, 'flow_stats': 0, 'hosts': 0}
+        db_stats_data = {'traffic_stats': 0, 'flow_stats': 0, 'hosts': 0, 'predictions': 0}
         predictions = {}
 
     return render_template_string(
