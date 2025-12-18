@@ -538,7 +538,6 @@ def index():
         predictions = {}
         with db._get_connection() as conn:
             # Get the latest prediction for each dpid/port pair
-            # We use a subquery to find the max ID for each group
             rows = conn.execute('''
                 SELECT dpid, port, predicted_bytes, timestamp 
                 FROM predictions p1
@@ -550,11 +549,47 @@ def index():
                 ORDER BY dpid, port
             ''').fetchall()
             
+            # 1. Calculate Dynamic Max (Peak traffic in this snapshot)
+            current_max_kb = 0.0
+            row_data = []
+            
             for row in rows:
+                kb_val = row['predicted_bytes'] / 1000.0
+                if kb_val > current_max_kb:
+                    current_max_kb = kb_val
+                row_data.append((row, kb_val))
+            
+            # Set a baseline threshold to avoid "Red" alerts for tiny background noise
+            # If the highest traffic is < 50KB, we consider the network "Idle" (Green)
+            # Otherwise, we scale based on the peak.
+            reference_max = max(current_max_kb, 50.0) 
+
+            for row, kb_val in row_data:
                 key = f"s{row['dpid']}:p{row['port']}"
+                
+                # Calculate ratio against the current peak
+                ratio = kb_val / reference_max
+                
+                if ratio < 0.4:
+                    level = 'low'
+                    status_text = 'Normal'
+                elif ratio < 0.75:
+                    level = 'medium'
+                    status_text = 'Elevated'
+                else:
+                    level = 'high'
+                    status_text = 'High Load'
+                
+                # Override: If traffic is absolutely very low, force Green
+                if kb_val < 10.0:
+                    level = 'low'
+                    status_text = 'Idle'
+
                 predictions[key] = {
-                    'value': f"{row['predicted_bytes'] / 1000:.1f} KB",
-                    'timestamp': row['timestamp']
+                    'value': f"{kb_val:.1f} KB",
+                    'timestamp': row['timestamp'],
+                    'level': level,
+                    'status': status_text
                 }
         
     except Exception as e:
