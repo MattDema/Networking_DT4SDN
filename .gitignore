@@ -39,7 +39,6 @@ Thumbs.db
 
 # ML models (large files)
 *.h5
-*.pkl
 *.pth
 
 # Database
