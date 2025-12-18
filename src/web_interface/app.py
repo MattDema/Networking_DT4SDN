@@ -285,6 +285,85 @@ DASHBOARD_HTML = """
             padding: 20px;
             text-align: center;
         }
+
+        /* --- NEW TRAFFIC CARD STYLES --- */
+        .traffic-grid {
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
+            gap: 12px;
+        }
+
+        .traffic-card {
+            padding: 12px; 
+            border-radius: 8px; 
+            text-align: center;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .traffic-low {
+            background-color: rgba(40, 167, 69, 0.1);
+            border-color: #28a745;
+            color: #155724;
+        }
+        
+        .traffic-medium {
+            background-color: rgba(255, 193, 7, 0.15);
+            border-color: #ffc107;
+            color: #856404;
+        }
+        
+        .traffic-high {
+            background-color: rgba(220, 53, 69, 0.15);
+            border-color: #dc3545;
+            color: #721c24;
+            animation: pulse-red 2s infinite;
+            font-weight: bold;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
+
+        .traffic-key {
+            font-size: 12px; 
+            opacity: 0.8; 
+            margin-bottom: 6px;
+            font-family: monospace;
+        }
+
+        .traffic-value {
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+
+        .traffic-status {
+            font-size: 10px; 
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Dark mode adjustments for traffic cards */
+        [data-theme="dark"] .traffic-low {
+            background-color: rgba(40, 167, 69, 0.2);
+            color: #75b798;
+        }
+        [data-theme="dark"] .traffic-medium {
+            background-color: rgba(255, 193, 7, 0.2);
+            color: #ffda6a;
+        }
+        [data-theme="dark"] .traffic-high {
+            background-color: rgba(220, 53, 69, 0.3);
+            color: #ea868f;
+        }
+
     </style>
 </head>
 <body data-theme="light">
@@ -321,13 +400,14 @@ DASHBOARD_HTML = """
 
         <!-- AI Prediction -->
         <div class="card">
-            <h3>🔮 AI Link Forecast</h3>
+            <h3>🔮 AI Link Forecast (Next 30s)</h3>
             {% if predictions %}
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="traffic-grid">
                     {% for key, data in predictions.items() %}
-                    <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">{{ key }}</div>
-                        <div style="font-weight: bold; color: var(--accent);">{{ data.value }}</div>
+                    <div class="traffic-card traffic-{{ data.level }}">
+                        <div class="traffic-key">{{ key }}</div>
+                        <div class="traffic-value">{{ data.value }}</div>
+                        <div class="traffic-status">{{ data.status }}</div>
                     </div>
                     {% endfor %}
                 </div>
