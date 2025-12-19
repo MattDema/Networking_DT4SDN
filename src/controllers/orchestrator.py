@@ -89,64 +89,75 @@ def run_prediction_loop():
 
     # 1. Check if model exists
     if not os.path.exists(MODEL_PATH):
-        print(f"⚠ [Predictor] Model not found at {MODEL_PATH}. Prediction disabled.")
+        print(f"⚠ [Predictor] Model not found at {MODEL_PATH}")
         return
 
     print(f"✅ [Predictor] Loading model from {MODEL_PATH}...")
 
     try:
-        # 2. Initialize Predictor (Loads PyTorch model into memory)
         predictor = TrafficPredictor(MODEL_PATH, SCALER_PATH if os.path.exists(SCALER_PATH) else None)
         print("✅ [Predictor] Model loaded successfully.")
     except Exception as e:
         print(f"❌ [Predictor] Failed to load model: {e}")
         return
 
-
-    # Create a dedicated DB connection for this thread
     db = get_db()
 
     while True:
         try:
-            # 3. Identify Links to Predict
-            # We want to predict traffic for every active port we have seen recently.
-            # You might need to add 'get_active_links()' to your db_manager,
-            # or just query distinct dpid/port pairs from the port_stats table.
-            active_links = db.get_active_links()  # Returns list of dicts: [{'dpid': 1, 'port': 1}, ...]
+            # 2. Get Active Links
+            active_links = db.get_active_links()
+            # Debug: Verify we actually see links
+            if not active_links:
+                print("💤 [Predictor] No active links found in the last 5 minutes.")
 
             for link in active_links:
                 dpid = link['dpid']
                 port = link['port']
-                link_id = f"s{dpid}-eth{port}"  # Create a unique ID string
+                link_id = f"s{dpid}-eth{port}"
 
+                # Skip LOCAL ports (internal switch ports)
+                if 'LOCAL' in str(port):
+                    continue
+
+                # 3. DEBUG: Check Data BEFORE Prediction
+                # This reveals if the DB query is returning 0 rows due to timezone mismatch
+                history = db.get_recent_traffic(link_id, duration_seconds=60)
+
+                if history.empty:
+                    print(f"⚠ [Debug] {link_id}: History is EMPTY. (Check Timezones!)")
+                    continue
+
+                if len(history) < 10:
+                    print(f"⚠ [Debug] {link_id}: History too short ({len(history)} rows).")
+                    continue
+
+                # 4. Attempt Prediction
                 try:
-                    # 4. Make Prediction
-                    # The predict_next_frame method (from your teammate's code)
-                    # handles fetching history from DB automatically.
+                    print(f"👉 [Predictor] Predicting for {link_id} with {len(history)} rows...")
                     result = predictor.predict_next_frame(link_id, db)
 
-                    # Result is a dict: {'link_id': ..., 'predictions': [...], ...}
-                    predicted_bytes = result['predictions'][0]  # Take the immediate next step
+                    if result and 'predictions' in result:
+                        predicted_bytes = result['predictions'][0]
+                        print(f"✅ [Result] {link_id} -> {predicted_bytes:.2f}")
 
-                    # 5. Store Prediction in DB
-                    db.store_prediction(
-                        dpid=dpid,
-                        port_no=port,
-                        predicted_bytes=float(predicted_bytes),
-                        timestamp=time.time()
-                    )
+                        db.store_prediction(
+                            dpid=dpid,
+                            port_no=port,
+                            predicted_bytes=float(predicted_bytes),
+                            timestamp=time.time()
+                        )
+                    else:
+                        print(f"❓ [Predictor] Model returned None for {link_id}")
 
-                    # Optional: Print to console to see it working
-                    print(f"🔮 [ML] {link_id}: {predicted_bytes:.0f} bytes predicted")
-
-                except ValueError:
-                    # This happens if there isn't enough history (e.g. startup)
-                    pass
+                except ValueError as ve:
+                    # STOP IGNORING THIS ERROR
+                    print(f"❌ [Predictor] ValueError on {link_id}: {ve}")
                 except Exception as e:
-                    print(f"⚠ [Predictor] Failed for {link_id}: {e}")
+                    print(f"❌ [Predictor] Crash on {link_id}: {e}")
 
         except Exception as e:
-            print(f"⚠ [Predictor] Loop Error: {e}")
+            print(f"⚠ [Predictor] Main Loop Error: {e}")
 
         time.sleep(PREDICTION_INTERVAL)
 
