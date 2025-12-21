@@ -171,7 +171,6 @@ class DatabaseManager:
             ''', (dpid, port_no, float(predicted_bytes), ts_val, 5))
             conn.commit()
 
-    # --- CRITICAL FIX: get_recent_traffic is now OUTSIDE store_prediction ---
     def get_recent_traffic(self, link_id: str, duration_seconds: int = 60):
         """
         Fetches recent traffic history for a specific link ID.

@@ -4,14 +4,13 @@ import time
 import threading
 import requests
 import numpy as np
-
 import sys
 import os
 
+# -- GETTING PATHS TO ACCESS CLASSES INSTANCES  -- 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.dirname(current_dir)
 sys.path.append(src_dir)
-
 project_root= os.path.dirname(src_dir)
 
 from database.db_manager import get_db
@@ -21,7 +20,6 @@ from web_interface.app import start_web_server, get_active_switches, get_hosts, 
 # --- CONFIGURATION ---
 COLLECTION_INTERVAL = 2  # How often to read from Physical Twin
 PREDICTION_INTERVAL = 5  # How often to predict the future
-# 2. Define Paths using the absolute project root
 
 MODELS = {
     'NORMAL': {
@@ -42,9 +40,7 @@ MODELS = {
     }
 }
 
-PREDICTION_INTERVAL = 5     # Keep this at 5 seconds
-LINK_BW_MBPS = 10
-COLLECTION_INTERVAL = 2
+LINK_BW_MBPS = 30
 
 # Helper to convert Mbps -> Bytes per Prediction Interval
 def mbps_to_bytes(mbps, interval):
@@ -52,16 +48,20 @@ def mbps_to_bytes(mbps, interval):
     return (mbps * 1_000_000 / 8) * interval
 
 # Normal: < 6 Mbps
-LIMIT_NORMAL = mbps_to_bytes(6, PREDICTION_INTERVAL)
+LIMIT_NORMAL = mbps_to_bytes(12, PREDICTION_INTERVAL)
 
 # Congestion: 8 Mbps to 12 Mbps (Center is 10 Mbps)
-LIMIT_CONGESTION_START = mbps_to_bytes(8, PREDICTION_INTERVAL)
-LIMIT_CONGESTION_END = mbps_to_bytes(13, PREDICTION_INTERVAL)
+LIMIT_CONGESTION_START = mbps_to_bytes(18, PREDICTION_INTERVAL)
+LIMIT_CONGESTION_END = mbps_to_bytes(24, PREDICTION_INTERVAL)
 
 # DDoS/Burst: > 15 Mbps
-LIMIT_DDOS_START = mbps_to_bytes(14, PREDICTION_INTERVAL)
+LIMIT_DDOS_START = mbps_to_bytes(27, PREDICTION_INTERVAL)
+
+
 PT_IP = os.getenv('PT_IP', '192.168.2.4')
 RYU_API_URL = f"http://{PT_IP}:8080"
+
+
 def collect_data_periodically():
     """Background thread to collect and store traffic data from Ryu."""
     db = get_db()
@@ -128,12 +128,12 @@ def run_prediction_loop():
     try:
         for scenario, paths in MODELS.items():
             if os.path.exists(paths['model']):
-                print(f"   👉 Loading {scenario} specialist...")
+                print(f"Loading {scenario} specialist...")
                 predictors[scenario] = TrafficPredictor(paths['model'], paths['scaler'])
             else:
-                print(f"   ⚠ Warning: {scenario} model not found at {paths['model']}")
+                print(f"Warning: {scenario} model not found at {paths['model']}")
     except Exception as e:
-        print(f"❌ Critical: Failed to load models: {e}")
+        print(f"Failed to load models: {e}")
         return
 
     # --- 2. START LOOP ---
@@ -222,7 +222,7 @@ def run_prediction_loop():
 # --- MAIN ENTRY POINT ---
 if __name__ == '__main__':
     print("========================================")
-    print("   DIGITAL TWIN ORCHESTRATOR v2.1")
+    print("   DIGITAL TWIN ORCHESTRATOR   ")
     print("========================================")
     print(f"Target Physical Twin: {RYU_API_URL}")
 

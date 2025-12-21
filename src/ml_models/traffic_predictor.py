@@ -143,16 +143,13 @@ class TrafficPredictor:
         raw_bytes = historical_data['bytes_sent'].values
 
         # 2. CONVERT TO MEGABYTES (Scaling Fix)
-        # We assume the model was trained on MB (float values ~1.0 to 20.0)
-        # 1e6 = 1,000,000
         traffic_in_mb = raw_bytes / 1e6
 
         # --- DEBUG PRINT ---
         avg_mb = np.mean(traffic_in_mb)
-        print(f"🔎 [DEBUG] {link_id} Input: {avg_mb:.2f} MB")
+        #print(f"🔎 [DEBUG] {link_id} Input: {avg_mb:.2f} MB")
 
         # 3. PREDICT (Feed MB into the model)
-        # predictions_mb can be a numpy array or scalar
         predictions_mb = self.predict(traffic_in_mb)
 
         # 4. SAFE EXTRACTION (Fixes 'invalid index' crash)
@@ -172,7 +169,7 @@ class TrafficPredictor:
         # The Orchestrator expects Bytes to save to DB
         predicted_bytes = pred_val_mb * 1e6
 
-        print(f"🔎 [DEBUG] {link_id} Output: {pred_val_mb:.2f} MB")
+       # print(f"🔎 [DEBUG] {link_id} Output: {pred_val_mb:.2f} MB")
 
         return {
             'link_id': link_id,
