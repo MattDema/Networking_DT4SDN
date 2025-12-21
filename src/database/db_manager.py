@@ -1,4 +1,6 @@
-# db_manager.py - SQLite database manager for Digital Twin
+# src/database/db_manager.py
+# SQLite database manager for Digital Twin
+
 import sqlite3
 import json
 import os
@@ -7,7 +9,6 @@ from typing import List, Dict, Optional
 
 # Default database path
 DB_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'digital_twin.db')
-
 
 class DatabaseManager:
     def __init__(self, db_path: str = None):
@@ -27,6 +28,8 @@ class DatabaseManager:
         schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
         
         with self._get_connection() as conn:
+            # If you have a schema.sql file, load it. 
+            # Otherwise, we assume the tables exist or this part handles creation.
             if os.path.exists(schema_path):
                 with open(schema_path, 'r') as f:
                     conn.executescript(f.read())
@@ -140,7 +143,7 @@ class DatabaseManager:
             conn.commit()
     
     def update_prediction_actual(self, prediction_id: int,
-                                  actual_packets: int, actual_bytes: int):
+                                 actual_packets: int, actual_bytes: int):
         """Update prediction with actual values for validation."""
         with self._get_connection() as conn:
             conn.execute('''
@@ -150,6 +153,72 @@ class DatabaseManager:
             ''', (actual_packets, actual_bytes, prediction_id))
             conn.commit()
     
+    def store_prediction(self, dpid: int, port_no: int,
+                         predicted_bytes: float, timestamp=None):
+        """
+        Saves a single prediction entry to the database.
+        """
+        # Format timestamp if provided as a number (Unix time)
+        ts_val = timestamp
+        if isinstance(timestamp, (int, float)):
+            ts_val = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+        with self._get_connection() as conn:
+            conn.execute('''
+                INSERT INTO predictions 
+                (dpid, port_no, predicted_bytes, timestamp, prediction_horizon)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (dpid, port_no, float(predicted_bytes), ts_val, 5))
+            conn.commit()
+
+    # --- CRITICAL FIX: get_recent_traffic is now OUTSIDE store_prediction ---
+    def get_recent_traffic(self, link_id: str, duration_seconds: int = 60):
+        """
+        Fetches recent traffic history for a specific link ID.
+        Calculates the DELTA (Speed) between rows.
+        """
+        import pandas as pd
+
+        # 1. Parse ID (e.g. "s1-eth1" -> dpid=1, port=1)
+        try:
+            clean_id = link_id.replace('s', '')
+            parts = clean_id.split('-eth')
+            dpid = int(parts[0])
+            port_no = int(parts[1])
+        except Exception:
+            # Return empty DF if parsing fails
+            return pd.DataFrame()
+
+        with self._get_connection() as conn:
+            # 2. Fetch Data
+            # We fetch more rows than needed (duration * 3) to ensure we have enough 
+            # points to calculate differences even if some polls were missed.
+            limit = duration_seconds * 3
+            query = '''
+                SELECT tx_bytes, timestamp 
+                FROM traffic_stats 
+                WHERE dpid = ? AND port_no = ? 
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            '''
+            df = pd.read_sql_query(query, conn, params=(dpid, port_no, limit))
+
+        if not df.empty and len(df) > 1:
+            # 3. Sort Oldest -> Newest (Required for Diff calculation)
+            df = df.sort_values('timestamp', ascending=True)
+
+            # 4. CRITICAL: Calculate Speed (Delta)
+            # This converts "Total Cumulative Bytes" into "Bytes per Interval"
+            df['bytes_sent'] = df['tx_bytes'].diff().fillna(0)
+
+            # Remove negative spikes (which happen if switch resets counters)
+            df['bytes_sent'] = df['bytes_sent'].clip(lower=0)
+
+            # Return only the relevant columns
+            return df[['bytes_sent', 'timestamp']]
+
+        return pd.DataFrame()  # Return empty if no data or not enough data
+
     # --- CLEANUP ---
     def cleanup_old_data(self, days: int = 7):
         """Remove data older than specified days."""
@@ -165,8 +234,11 @@ class DatabaseManager:
         with self._get_connection() as conn:
             stats = {}
             for table in ['traffic_stats', 'flow_stats', 'hosts', 'predictions']:
-                count = conn.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
-                stats[table] = count
+                try:
+                    count = conn.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
+                    stats[table] = count
+                except sqlite3.OperationalError:
+                    stats[table] = 0 # Table might not exist yet
             return stats
 
     def get_active_links(self) -> List[Dict]:
@@ -183,100 +255,12 @@ class DatabaseManager:
 
             return [{'dpid': row['dpid'], 'port': row['port_no']} for row in rows]
 
-    def store_prediction(self, dpid: int, port_no: int,
-                         predicted_bytes: float, timestamp=None):
-        """
-        Saves a single prediction entry to the database.
-        """
-        # Format timestamp if provided as a number (Unix time)
-        ts_val = timestamp
-        if isinstance(timestamp, (int, float)):
-            import datetime
-            ts_val = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-
-        with self._get_connection() as conn:
-            conn.execute('''
-                INSERT INTO predictions 
-                (dpid, port_no, predicted_bytes, timestamp, prediction_horizon)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (dpid, port_no, float(predicted_bytes), ts_val, 5))
-
-            def get_recent_traffic(self, link_id: str, duration_seconds: int = 60):
-                """
-                Fetches recent traffic history for a specific link ID (e.g., 's1-eth1').
-                """
-                import pandas as pd
-
-                # 1. Parse "s1-eth1" -> dpid=1, port=1
-                try:
-                    clean_id = link_id.replace('s', '')
-                    parts = clean_id.split('-eth')
-                    dpid = int(parts[0])
-                    port_no = int(parts[1])
-                except Exception:
-                    return pd.DataFrame()
-
-                # 2. Use the connection context to read into Pandas
-                with self._get_connection() as conn:
-                    query = '''
-                        SELECT tx_bytes, timestamp 
-                        FROM traffic_stats 
-                        WHERE dpid = ? AND port_no = ? 
-                        ORDER BY timestamp DESC 
-                        LIMIT ?
-                    '''
-                    # Fetch 2x the duration to ensure we have enough data points (approx 1 per sec)
-                    df = pd.read_sql_query(query, conn, params=(dpid, port_no, duration_seconds * 2))
-
-                # 3. Rename and Sort (Post-processing)
-                if not df.empty:
-                    df = df.rename(columns={'tx_bytes': 'bytes_sent'})
-                    df = df.sort_values('timestamp', ascending=True)
-
-                return df
-
-    def get_recent_traffic(self, link_id: str, duration_seconds: int = 60):
-        """
-        Fetches recent traffic history for a specific link ID (e.g., 's1-eth1').
-        """
-        import pandas as pd
-
-        # 1. Parse "s1-eth1" -> dpid=1, port=1
-        try:
-            clean_id = link_id.replace('s', '')
-            parts = clean_id.split('-eth')
-            dpid = int(parts[0])
-            port_no = int(parts[1])
-        except Exception:
-            return pd.DataFrame()
-
-        # 2. Use the connection context to read into Pandas
-        with self._get_connection() as conn:
-            query = '''
-                SELECT tx_bytes, timestamp 
-                FROM traffic_stats 
-                WHERE dpid = ? AND port_no = ? 
-                ORDER BY timestamp DESC 
-                LIMIT ?
-            '''
-            # Fetch 2x the duration to ensure we have enough data points (approx 1 per sec)
-            df = pd.read_sql_query(query, conn, params=(dpid, port_no, duration_seconds * 2))
-
-        # 3. Rename and Sort (Post-processing)
-        if not df.empty:
-            df = df.rename(columns={'tx_bytes': 'bytes_sent'})
-            df = df.sort_values('timestamp', ascending=True)
-
-        return df
-# src/database/db_manager.py
-
-# ... (DatabaseManager class definition) ...
-
+# --- Helper Function ---
 def get_db():
     """
-    Returns a NEW DatabaseManager instance every time.
-    Crucial for multi-threading: Every thread (Collector, Predictor, Flask)
-    needs its own separate connection to the SQLite file.
+    Returns a NEW DatabaseManager instance.
+    Essential for multi-threading (Collector vs Predictor vs Web).
     """
     db = DatabaseManager()
+
     return db
