@@ -22,11 +22,34 @@ from web_interface.app import start_web_server, get_active_switches, get_hosts, 
 COLLECTION_INTERVAL = 2  # How often to read from Physical Twin
 PREDICTION_INTERVAL = 5  # How often to predict the future
 # 2. Define Paths using the absolute project root
-MODEL_PATH = os.path.join(project_root, 'models', 'congestion_ultimate.pt')
-SCALER_PATH = os.path.join(project_root, 'models', 'congestion_ultimate_scaler.pkl')
+
+MODELS = {
+    'NORMAL': {
+        'model': os.path.join(project_root, 'models', 'normal_ultimate.pt'),
+        'scaler': os.path.join(project_root, 'models', 'normal_ultimate_scaler.pkl')
+    },
+    'CONGESTION': {
+        'model': os.path.join(project_root, 'models', 'congestion_ultimate.pt'),
+        'scaler': os.path.join(project_root, 'models', 'congestion_ultimate_scaler.pkl')
+    },
+    'DDOS': {
+        'model': os.path.join(project_root, 'models', 'ddos_ultimate.pt'),
+        'scaler': os.path.join(project_root, 'models', 'ddos_ultimate_scaler.pkl')
+    },
+    'BURST': {
+        'model': os.path.join(project_root, 'models', 'burst_ultimate.pt'),
+        'scaler': os.path.join(project_root, 'models', 'burst_ultimate_scaler.pkl')
+    }
+}
 
 PREDICTION_INTERVAL = 5     # Keep this at 5 seconds
 LINK_BW_MBPS = 10
+COLLECTION_INTERVAL = 2
+
+# Helper to convert Mbps -> Bytes per Prediction Interval
+def mbps_to_bytes(mbps, interval):
+    # (Mbps * 1,000,000 bits) / 8 bits_per_byte * interval_seconds
+    return (mbps * 1_000_000 / 8) * interval
 
 # Normal: < 6 Mbps
 LIMIT_NORMAL = mbps_to_bytes(6, PREDICTION_INTERVAL)
@@ -37,7 +60,8 @@ LIMIT_CONGESTION_END = mbps_to_bytes(13, PREDICTION_INTERVAL)
 
 # DDoS/Burst: > 15 Mbps
 LIMIT_DDOS_START = mbps_to_bytes(14, PREDICTION_INTERVAL)
-
+PT_IP = os.getenv('PT_IP', '192.168.2.4')
+RYU_API_URL = f"http://{PT_IP}:8080"
 def collect_data_periodically():
     """Background thread to collect and store traffic data from Ryu."""
     db = get_db()
@@ -99,76 +123,85 @@ def collect_data_periodically():
 def run_prediction_loop():
     """Background thread to predict future traffic using the trained model."""
 
-    # 1. Check if model exists
-    if not os.path.exists(MODEL_PATH):
-        print(f"⚠ [Predictor] Model not found at {MODEL_PATH}")
-        return
-
-    print(f" [Predictor] Loading model from {MODEL_PATH}...")
-
+    # --- 1. INITIALIZE PREDICTORS ---
+    predictors = {}
     try:
-        predictor = TrafficPredictor(MODEL_PATH, SCALER_PATH if os.path.exists(SCALER_PATH) else None)
-        print("[Predictor] Model loaded successfully.")
+        for scenario, paths in MODELS.items():
+            if os.path.exists(paths['model']):
+                print(f"   👉 Loading {scenario} specialist...")
+                predictors[scenario] = TrafficPredictor(paths['model'], paths['scaler'])
+            else:
+                print(f"   ⚠ Warning: {scenario} model not found at {paths['model']}")
     except Exception as e:
-        print(f"[Predictor] Failed to load model: {e}")
+        print(f"❌ Critical: Failed to load models: {e}")
         return
 
+    # --- 2. START LOOP ---
     db = get_db()
 
     while True:
         try:
             # 2. Get Active Links
             active_links = db.get_active_links()
-            # Debug: Verify we actually see links
+
             if not active_links:
-                print("[Predictor] No active links found in the last 5 minutes.")
+                # print("[Predictor] No active links...")
+                pass
 
             for link in active_links:
                 dpid = link['dpid']
                 port = link['port']
                 link_id = f"s{dpid}-eth{port}"
 
-                # Skip LOCAL ports (internal switch ports)
+                # Skip LOCAL ports
                 if 'LOCAL' in str(port):
                     continue
 
-                # 3. DEBUG: Check Data BEFORE Prediction
-                # This reveals if the DB query is returning 0 rows due to timezone mismatch
+                # 3. Check Data
                 history = db.get_recent_traffic(link_id, duration_seconds=60)
 
                 if history.empty:
-                    print(f"⚠ [Debug] {link_id}: History is EMPTY. (Check Timezones!)")
+                    print(f"⚠ [Debug] {link_id}: Insufficient history.")
                     continue
 
-                if len(history) < 10:
-                    print(f"⚠ [Debug] {link_id}: History too short ({len(history)} rows).")
+                # 4. DETERMINE SCENARIO (Dispatcher Logic)
+               # Calculate average bytes per step from history
+                avg_bytes_per_step = history['bytes_sent'].tail(3).mean()
+
+                # Approximate Bytes Per Second (assuming ~2s collection interval)
+                # Ideally, calculate this dynamically based on timestamps, but this is a safe patch:
+                estimated_bps = avg_bytes_per_step / COLLECTION_INTERVAL
+                # Convert the Thresholds to Bytes Per Second for comparison
+                # (LIMIT constants are currently based on 5 seconds)
+                limit_ddos_bps = LIMIT_DDOS_START / PREDICTION_INTERVAL
+                limit_cong_bps = LIMIT_CONGESTION_START / PREDICTION_INTERVAL
+
+                # Default
+                current_scenario = 'NORMAL'
+                active_model = predictors.get('NORMAL')
+
+                if estimated_bps > limit_ddos_bps:
+                    current_scenario = 'DDOS'
+                    active_model = predictors.get('DDOS')
+                elif estimated_bps > limit_cong_bps:
+                    current_scenario = 'CONGESTION'
+                    active_model = predictors.get('CONGESTION')
+
+                if active_model is None:
+                    print("Error: No models available.")
                     continue
 
-                # 4. Attempt Prediction
+
+                print(f"Current scenario chosen: {current_scenario}")
+
+                # 5. PREDICT
                 try:
-                    print(f"[Predictor] Predicting for {link_id} with {len(history)} rows...")
-                    result = predictor.predict_next_frame(link_id, db)
+                    result = active_model.predict_next_frame(link_id, db)
 
                     if result and 'predictions' in result:
                         predicted_bytes = result['predictions'][0]
-                        print(f"[Result] {link_id} -> {predicted_bytes:.2f}")
 
-                        #Check status of the link among the various scenarios: Normale, Burst, DDoS, Congestion
-                        status = "UNKNOWN"
-
-                        if pred_bytes < LIMIT_CONGESTION_START:
-                            status = "NORMAL"
-                            print(f"{status} | {link_id}: {predicted_bytes / 1e6:.2f} MB (Safe)")
-
-                        elif LIMIT_CONGESTION_START <= predicted_bytes < LIMIT_DDOS_START:
-                            status = "⚠ CONGESTION"
-                            print(f"{status} | {link_id}: {predicted_bytes / 1e6:.2f} MB -> Link Saturation likely!")
-                            # Action: Reroute traffic?
-
-                        elif predicted_bytes >= LIMIT_DDOS_START:
-                            status = " !!! DDOS / BURST"
-                            print(f"{status} | {link_id}: {predicted_bytes / 1e6:.2f} MB -> SEVERE OVERLOAD!")
-                            # Action: Block port? Apply QoS?
+                        print(f"[{current_scenario}] {link_id} -> Pred: {predicted_bytes / 1e6:.2f} MB")
 
                         db.store_prediction(
                             dpid=dpid,
@@ -176,24 +209,15 @@ def run_prediction_loop():
                             predicted_bytes=float(predicted_bytes),
                             timestamp=time.time()
                         )
-                    else:
-                        print(f"[Predictor] Model returned None for {link_id}")
-
                 except ValueError as ve:
-                    print(f"[Predictor] ValueError on {link_id}: {ve}")
+                    print(f"❌ [Model Error] {current_scenario} model failed on {link_id}: {ve}")
                 except Exception as e:
-                    print(f"[Predictor] Crash on {link_id}: {e}")
+                    print(f"Prediction error on {link_id}: {e}")
 
         except Exception as e:
             print(f"⚠ [Predictor] Main Loop Error: {e}")
 
         time.sleep(PREDICTION_INTERVAL)
-
-# Helper to convert Mbps -> Bytes per Prediction Interval
-def mbps_to_bytes(mbps, interval):
-    # (Mbps * 1,000,000 bits) / 8 bits_per_byte * interval_seconds
-    return (mbps * 1_000_000 / 8) * interval
-
 
 # --- MAIN ENTRY POINT ---
 if __name__ == '__main__':
