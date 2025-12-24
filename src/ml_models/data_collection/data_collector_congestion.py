@@ -15,7 +15,7 @@ import signal
 # --- Configurazione ---
 OUTPUT_FILE = "network_data_30min.csv"
 MONITORED_INTERFACE = "s1-eth2" 
-SIMULATION_TIME = 1800  # 30 minuti (1800 secondi)
+SIMULATION_TIME = 50000  # 30 minuti (1800 secondi)
 LINK_BW = 30            # 30 Mbps di capacità del link
 
 class CustomTopo(Topo):

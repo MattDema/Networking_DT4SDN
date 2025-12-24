@@ -15,8 +15,8 @@ import signal
 # --- Configurazione ---
 OUTPUT_FILE = "network_data_burst.csv"
 MONITORED_INTERFACE = "s1-eth2" 
-SIMULATION_TIME = 1800  # 30 minuti
-LINK_BW = 10            # Capacità 10 Mbps
+SIMULATION_TIME = 50000  # 30 minuti
+LINK_BW = 30            # Capacità 10 Mbps
 
 class CustomTopo(Topo):
     def build(self):
