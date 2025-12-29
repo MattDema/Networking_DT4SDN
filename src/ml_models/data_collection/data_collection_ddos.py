@@ -15,8 +15,8 @@ import signal
 # --- Configurazione ---
 OUTPUT_FILE = "network_data_ddos.csv"
 MONITORED_INTERFACE = "s1-eth2" 
-SIMULATION_TIME = 1800  # 30 minuti
-LINK_BW = 10            # Il collo di bottiglia è sempre 10 Mbps
+SIMULATION_TIME = 50000  # Durata totale della simulazione in secondi
+LINK_BW = 30            # Il collo di bottiglia è sempre 30 Mbps
 
 class CustomTopo(Topo):
     def build(self):
