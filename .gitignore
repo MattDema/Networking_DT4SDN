@@ -28,7 +28,8 @@ models/
 tests/
 
 # Visuals
-visuals/
+visuals/compare_all_scalers.py
+visuals/inspect_scaler.py
 
 # IDE
 .vscode/
