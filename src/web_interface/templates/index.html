@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Digital Twin Orchestrator</title>
+    <!-- Link to external CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body data-theme="light">
+    <div class="header">
+        <h1>🌐 Digital Twin Orchestrator</h1>
+        <div class="header-controls">
+            <div class="live-indicator">
+                <span class="live-dot"></span>
+                <span>LIVE</span>
+            </div>
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <span class="theme-icon" id="theme-icon">🌙</span>
+                <span id="theme-text">Dark</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <!-- Left Column: Database (1/3) -->
+        <div class="sidebar">
+            <div class="card" style="height: 100%;">
+                <h3>🗄️ Database Storage</h3>
+                <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 12px;">
+                    SQLite storage for historical data and real-time monitoring.
+                </p>
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 8px;">Table</th>
+                            <th style="padding: 8px;">Entries</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding: 8px;"><code>traffic_stats</code></td>
+                            <td style="padding: 8px;"><strong>{{ db_stats.traffic_stats }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;"><code>flow_stats</code></td>
+                            <td style="padding: 8px;"><strong>{{ db_stats.flow_stats }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;"><code>hosts</code></td>
+                            <td style="padding: 8px;"><strong>{{ db_stats.hosts }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;"><code>predictions</code></td>
+                            <td style="padding: 8px;"><strong>{{ db_stats.predictions }}</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="margin-top: 20px; font-size: 0.8em; color: var(--text-secondary); line-height: 1.4;">
+                    <p>• <b>Traffic:</b> Port metrics used for ML training.</p>
+                    <p>• <b>Flows:</b> Snapshots of active OpenFlow rules.</p>
+                    <p>• <b>Hosts:</b> Inventory of discovered devices.</p>
+                    <p>• <b>Predictions:</b> ML-generated traffic forecasts.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Connection, Switches, Forecast (2/3) -->
+        <div class="main-content">
+            <div class="top-row">
+                <!-- Connection Status -->
+                <div class="card">
+                    <h3>📡 Connection</h3>
+                    <p style="margin: 5px 0; font-size: 0.9em;">PT: <strong>{{ pt_ip }}</strong></p>
+                    <p style="margin: 5px 0; font-size: 0.9em;">Status: <span class="status-{{ 'connected' if connection_status == 'Connected' else 'disconnected' }}">
+                        {{ connection_status }}
+                    </span></p>
+                </div>
+
+                <!-- Switch Count -->
+                <div class="card">
+                    <h3>🔀 Switches</h3>
+                    <div style="display: flex; align-items: baseline; gap: 10px;">
+                        <div class="stat-value" style="font-size: 28px;">{{ switches|length }}</div>
+                        <div class="stat-label">Active Nodes</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Prediction -->
+            <div class="card" style="flex-grow: 1;">
+                <h3>🔮 AI Link Forecast (Next 30s)</h3>
+                {% if predictions %}
+                    <div class="traffic-grid">
+                        {% for key, data in predictions.items() %}
+                        <div class="traffic-card traffic-{{ data.level }}">
+                            <div class="traffic-key">{{ key }}</div>
+                            <div class="traffic-value" style="font-size: 1.2em;">{{ data.value }}</div>
+                            <div class="traffic-status">{{ data.status }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="stat-label" style="padding: 20px; text-align: center;">Waiting for traffic data to generate forecasts...</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Width Sections -->
+    <div class="grid">
+        <!-- Network Topology -->
+        <div class="card full-width">
+            <h3>🖧 Network Topology</h3>
+            <div class="device-list">
+                <div class="device-section">
+                    <h4>Switches <span class="count-badge">{{ switches|length }}</span></h4>
+                    {% if switches %}
+                        {% for sw in switches %}
+                            <span class="device-item switch">s{{ sw }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="no-data">No switches detected</span>
+                    {% endif %}
+                </div>
+                
+                <div class="device-section">
+                    <h4>Hosts <span class="count-badge">{{ hosts|length }}</span></h4>
+                    {% if hosts %}
+                        {% for host in hosts %}
+                            <span class="device-item host">{{ host.mac }} → s{{ host.dpid }}:p{{ host.port }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="no-data">Generate traffic (ping) to discover hosts</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Flow Table -->
+        <div class="card full-width">
+            <h3>📊 Live Flow Statistics</h3>
+            {% if flows %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Switch</th>
+                            <th>Priority</th>
+                            <th>Match Rules</th>
+                            <th>Packets</th>
+                            <th>Bytes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dpid, flow_list in flows.items() %}
+                            {% for flow in flow_list %}
+                            <tr>
+                                <td>s{{ dpid }}</td>
+                                <td>{{ flow.priority }}</td>
+                                <td><code>{{ flow.match }}</code></td>
+                                <td><strong>{{ flow.packet_count }}</strong></td>
+                                <td>{{ flow.byte_count }}</td>
+                                <td><code>{{ flow.actions }}</code></td>
+                            </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="no-data">No flow data available yet. Generate traffic in Mininet (ping/iperf).</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Link to external JS -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
