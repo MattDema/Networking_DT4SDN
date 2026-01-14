@@ -86,9 +86,16 @@ def get_topology_info():
     # We do NOT look for a local 'current_topology.json' file.
     try:
         url = f"{RYU_API_URL}/topology/metadata"
+        print(f"DEBUG: Requesting topology from {url}...")  # <--- DEBUG PRINT
         resp = requests.get(url, timeout=2)
+        
         if resp.status_code == 200:
-            return resp.json()
+            data = resp.json()
+            print(f"DEBUG: Received topology data: {data}")  # <--- DEBUG PRINT
+            return data
+        else:
+            print(f"DEBUG: Failed to get topology. Status: {resp.status_code}, Body: {resp.text}") # <--- DEBUG PRINT
+
     except Exception as e:
         # Controller might be down, or network unreachable
         print(f"Warning: Could not fetch validation topology from {url}: {e}")
