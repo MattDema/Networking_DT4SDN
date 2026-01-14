@@ -3,8 +3,9 @@
 <head>
     <title>Digital Twin Orchestrator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script> 
+    <!-- LIVE LIBRARY MUST LOAD FIRST -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script> 
 </head>
 <body data-theme="light">
     <div class="header">
