@@ -8,6 +8,10 @@ from mininet.net import Mininet
 from mininet.node import OVSKernelSwitch, RemoteController
 from mininet.cli import CLI
 from mininet.link import TCLink
+import json
+import os
+import requests
+import time
 """
 
 TOPO_CLASS_START = """
@@ -22,8 +26,36 @@ class CustomTopo(Topo):
 MAIN_FUNCTION = """
 topos = {"customtopo": (lambda: CustomTopo())}
 
+def save_topology_metadata(topo, topo_type):
+    data = {
+        "type": topo_type,
+        "switches": topo.switches(),
+        "hosts": topo.hosts(),
+        "links": topo.links(sort=True)
+    }
+    
+    # 1. Save locally (for backup/debugging)
+    with open("current_topology.json", "w") as f:
+        json.dump(data, f, indent=4)
+    print(f"Topology metadata saved to {os.path.abspath('current_topology.json')}")
+
+    # 2. Push to Ryu Controller (so Dashboard can see it)
+    # We wait a brief moment to ensure Ryu is ready if started simultaneously
+    time.sleep(1) 
+    try:
+        url = "http://127.0.0.1:8080/topology/metadata"
+        requests.post(url, json=data, timeout=2)
+        print(f"✓ Topology metadata sent to Controller ({url})")
+    except Exception as e:
+        print(f"⚠ Warning: Could not push topology to Ryu: {e}")
+        print("  (Is the controller running? sudo ryu-manager ...)")
+
 def main():
     topo = CustomTopo()
+    
+    # Save topology info for Dashboard
+    save_topology_metadata(topo, "{TOPOLOGY_TYPE}")
+
     net = Mininet(
         topo=topo,
         switch=OVSKernelSwitch,
@@ -48,11 +80,6 @@ def generate_linear_topology(num_switches: int, num_hosts: int) -> str:
     """
     Linear topology: s1--s2--s3--s4
     Hosts distributed evenly across switches
-    
-    Example (3 switches, 4 hosts):
-    h1--s1--s2--s3--h2
-         |      |
-        h3     h4
     """
     code = ""
     
@@ -95,13 +122,6 @@ def generate_linear_topology(num_switches: int, num_hosts: int) -> str:
 def generate_star_topology(num_switches: int, num_hosts: int) -> str:
     """
     Star topology: One central switch, others connected to it
-    
-    Example (4 switches, 4 hosts):
-         s2--h1
-          |
-    s3--s1--s4--h2
-     |       |
-    h3      h4
     """
     code = ""
     
@@ -144,15 +164,6 @@ def generate_star_topology(num_switches: int, num_hosts: int) -> str:
 def generate_tree_topology(num_switches: int, num_hosts: int, depth: int = 2) -> str:
     """
     Tree topology: Hierarchical structure
-    
-    Example (7 switches, 4 hosts, depth=2):
-              s1 (root)
-            /    \\
-          s2      s3
-         /  \\    /  \\
-       s4   s5  s6   s7
-       |    |   |    |
-       h1  h2  h3   h4
     """
     code = ""
     
@@ -202,15 +213,6 @@ def generate_tree_topology(num_switches: int, num_hosts: int, depth: int = 2) ->
 def generate_mesh_topology(num_switches: int, num_hosts: int) -> str:
     """
     Mesh topology: All switches connected to each other
-    High redundancy, best for failure tolerance
-    
-    Example (3 switches, 3 hosts):
-    s1--s2
-    |\ /|
-    | X |
-    |/ \\|
-    s3--+
-    (Every switch connected to every other switch)
     """
     code = ""
     
@@ -255,15 +257,6 @@ def generate_custom_topology(num_switches: int, num_hosts: int,
                             output_file: str = 'custom_network.py'):
     """
     Generate Mininet topology script
-    
-    Args:
-        num_switches: Number of switches (minimum 1)
-        num_hosts: Number of hosts (minimum 1)
-        topology_type: 'linear', 'tree', 'star', 'mesh'
-        output_file: Where to save generated script
-    
-    Returns:
-        Path to generated file
     """
     
     # Validate inputs
@@ -292,7 +285,8 @@ def generate_custom_topology(num_switches: int, num_hosts: int,
     script = INCLUDES
     script += TOPO_CLASS_START
     script += topology_generators[topology_type](num_switches, num_hosts)
-    script += MAIN_FUNCTION
+    # REPLACE METADATA PLACEHOLDER
+    script += MAIN_FUNCTION.replace("{TOPOLOGY_TYPE}", topology_type)
     
     # Write to file
     with open(output_file, 'w') as f:

@@ -80,6 +80,18 @@ def get_all_flow_stats():
         return {}, f"Error: {str(e)}"
 
 
+def get_topology_info():
+    """Fetch the high-level topology type from Ryu."""
+    try:
+        url = f"{RYU_API_URL}/topology/metadata"
+        resp = requests.get(url, timeout=2)
+        if resp.status_code == 200:
+            return resp.json()
+    except:
+        pass
+    return {"type": "Unknown", "switches": [], "links": []}
+
+
 # --- FLASK ROUTES ---
 @app.route('/')
 def index():
@@ -87,6 +99,7 @@ def index():
     switches = get_active_switches()
     hosts = get_hosts()
     flows, status = get_all_flow_stats()
+    topo_info = get_topology_info() # <-- Fetch topology info
 
     try:
         db = get_db()
@@ -162,6 +175,7 @@ def index():
         hosts=hosts,
         flows=flows,
         connection_status=status,
+        topo_info=topo_info,  # <-- Pass to template
         db_stats=db_stats_data,
         predictions=predictions
     )

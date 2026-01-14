@@ -5,14 +5,25 @@ from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet, ethernet, ether_types
+from ryu.app.wsgi import ControllerBase, WSGIApplication, route
+from webob import Response
+import json
 
 
 class PhysicalTwinController(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+    _CONTEXTS = {'wsgi': WSGIApplication}
 
     def __init__(self, *args, **kwargs):
         super(PhysicalTwinController, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
+        
+        # Store topology metadata (received from Mininet script)
+        self.topology_metadata = {"type": "Unknown", "switches": [], "links": []}
+
+        # Initialize WSGI for REST API
+        wsgi = kwargs['wsgi']
+        wsgi.register(TopologyController, {'physical_controller': self})
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -88,3 +99,34 @@ class PhysicalTwinController(app_manager.RyuApp):
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
+    
+    # --- Helper methods for REST Controller ---
+    def set_topology(self, data):
+        self.topology_metadata = data
+        self.logger.info(f"Topology metadata updated via API: {data.get('type')}")
+
+    def get_topology(self):
+        return self.topology_metadata
+
+
+class TopologyController(ControllerBase):
+    def __init__(self, req, link, data, **config):
+        super(TopologyController, self).__init__(req, link, data, **config)
+        self.physical_controller = data['physical_controller']
+
+    @route('topology', '/topology/metadata', methods=['GET'])
+    def get_metadata(self, req, **kwargs):
+        """Dashboard calls this to get current topology info"""
+        body = json.dumps(self.physical_controller.get_topology())
+        return Response(content_type='application/json', body=body)
+
+    @route('topology', '/topology/metadata', methods=['POST'])
+    def set_metadata(self, req, **kwargs):
+        """Mininet script calls this to set current topology info"""
+        try:
+            # Parse JSON body
+            data = json.loads(req.body) if req.body else {}
+            self.physical_controller.set_topology(data)
+            return Response(start_response=200, body=json.dumps({"status": "success"}))
+        except Exception as e:
+            return Response(status=500, body=str(e))
