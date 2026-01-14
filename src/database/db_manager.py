@@ -131,15 +131,15 @@ class DatabaseManager:
             return [dict(row) for row in rows]
     
     # --- PREDICTIONS ---
-    def save_prediction(self, dpid: int, predicted_packets: int,
+    def save_prediction(self, dpid: int, port: int, predicted_packets: int,
                         predicted_bytes: int, horizon: int = 30):
         """Save a traffic prediction."""
         with self._get_connection() as conn:
             conn.execute('''
                 INSERT INTO predictions 
-                (dpid, predicted_packets, predicted_bytes, prediction_horizon)
-                VALUES (?, ?, ?, ?)
-            ''', (dpid, predicted_packets, predicted_bytes, horizon))
+                (dpid, port, predicted_packets, predicted_bytes, prediction_horizon)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (dpid, port, predicted_packets, predicted_bytes, horizon))
             conn.commit()
     
     def update_prediction_actual(self, prediction_id: int,
