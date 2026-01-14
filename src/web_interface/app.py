@@ -24,7 +24,16 @@ import numpy as np
 state_predictor = None
 try:
     import glob
-    model_files = glob.glob('models/*_classifier_3050.pt')
+    # Get project root (two levels up from this file: web_interface -> src -> project)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    models_dir = os.path.join(project_root, 'models')
+    
+    model_pattern = os.path.join(models_dir, '*_classifier_3050.pt')
+    model_files = glob.glob(model_pattern)
+    
+    print(f"Looking for models in: {models_dir}")
+    print(f"Found models: {model_files}")
+    
     if model_files:
         # Use mixed model as default (trained on all patterns)
         mixed_model = [f for f in model_files if 'mixed' in f]
@@ -32,9 +41,11 @@ try:
         state_predictor = StatePredictor(model_path)
         print(f"✓ StatePredictor loaded: {model_path}")
     else:
-        print("⚠️ No classifier models found in models/")
+        print(f"⚠️ No classifier models found in {models_dir}")
 except Exception as e:
     print(f"⚠️ Could not load StatePredictor: {e}")
+    import traceback
+    traceback.print_exc()
 
 # --- CONFIGURATION ---
 # We define these here because the Dashboard needs them to fetch live data
@@ -932,27 +943,51 @@ def api_prediction():
         # Get recent traffic data from database
         traffic_history = db.get_traffic_history(minutes=2)
         
-        if not traffic_history:
+        if not traffic_history or len(traffic_history) < 2:
             return jsonify({
-                'error': 'No traffic data',
+                'error': 'Insufficient traffic data',
                 'state': 'UNKNOWN',
                 'confidence': 0,
                 'estimated_bandwidth': 0,
+                'current_traffic': 0,
                 'color': '#666666'
             })
         
-        # Extract bytes values (sum across all ports)
+        # CRITICAL FIX: Calculate DELTAS (bytes per second) not cumulative!
+        # The database stores cumulative counters, we need the difference
         bytes_per_second = []
-        current_traffic = 0
+        prev_bytes = None
         
         for entry in traffic_history:
-            bytes_val = entry.get('tx_bytes', 0) + entry.get('rx_bytes', 0)
-            bytes_per_second.append(bytes_val)
-            current_traffic = bytes_val  # Last value is current
+            total_bytes = entry.get('tx_bytes', 0) + entry.get('rx_bytes', 0)
+            
+            if prev_bytes is not None:
+                # Calculate bytes transferred since last sample
+                delta = total_bytes - prev_bytes
+                # Only add positive deltas (counter might reset)
+                if delta >= 0:
+                    bytes_per_second.append(delta)
+                else:
+                    bytes_per_second.append(0)  # Counter reset
+            
+            prev_bytes = total_bytes
         
-        # If we have a predictor, use it
+        if not bytes_per_second:
+            bytes_per_second = [0]
+        
+        current_traffic = bytes_per_second[-1] if bytes_per_second else 0
+        
+        # Debug logging
+        print(f"[API] Samples: {len(bytes_per_second)}, Current: {current_traffic:,.0f} B/s, Avg: {np.mean(bytes_per_second):,.0f} B/s")
+        
+        # If we have a predictor with enough data, use it
         if state_predictor and len(bytes_per_second) >= 10:
-            historical_data = np.array(bytes_per_second[-state_predictor.sequence_length:])
+            # Pad if needed
+            if len(bytes_per_second) < state_predictor.sequence_length:
+                padding = [bytes_per_second[0]] * (state_predictor.sequence_length - len(bytes_per_second))
+                bytes_per_second = padding + bytes_per_second
+            
+            historical_data = np.array(bytes_per_second[-state_predictor.sequence_length:], dtype=np.float32)
             result = state_predictor.predict(historical_data)
             result['current_traffic'] = current_traffic
             result['timestamp'] = time.time()
@@ -961,13 +996,14 @@ def api_prediction():
             # Fallback: simple threshold-based estimation
             avg_traffic = np.mean(bytes_per_second) if bytes_per_second else 0
             
-            if avg_traffic < 500000:
+            # These thresholds are for bytes/second
+            if avg_traffic < 100000:  # < 100 KB/s
                 state, color = 'NORMAL', '#27ae60'
-            elif avg_traffic < 1500000:
+            elif avg_traffic < 500000:  # < 500 KB/s
                 state, color = 'ELEVATED', '#f39c12'
-            elif avg_traffic < 2500000:
+            elif avg_traffic < 1000000:  # < 1 MB/s
                 state, color = 'HIGH', '#e67e22'
-            else:
+            else:  # > 1 MB/s
                 state, color = 'CRITICAL', '#e74c3c'
             
             return jsonify({
@@ -978,7 +1014,8 @@ def api_prediction():
                 'current_traffic': current_traffic,
                 'color': color,
                 'prediction_horizon': 60,
-                'timestamp': time.time()
+                'timestamp': time.time(),
+                'model_loaded': state_predictor is not None
             })
             
     except Exception as e:
