@@ -15,8 +15,8 @@ import signal
 # --- Configurazione ---
 OUTPUT_FILE = "network_data_normal.csv" # Nome file diverso per non sovrascrivere
 MONITORED_INTERFACE = "s1-eth2" 
-SIMULATION_TIME = 1800  # 30 minuti
-LINK_BW = 10            # Capacità del link (identica allo scenario congestione)
+SIMULATION_TIME = 50000  # secondi
+LINK_BW = 30            # Capacità del link (identica allo scenario congestione)
 
 class CustomTopo(Topo):
     def build(self):

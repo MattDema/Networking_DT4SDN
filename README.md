@@ -48,7 +48,41 @@ python3 test_setup.py
 
 ### Running the Project
 
-See [docs/SETUP.md](docs/SETUP.md) for detailed instructions.
+## 🌐 Multi-VM Orchestration Setup
+
+The system is designed to run across two separate virtual machines to isolate the **Physical Twin (PT)** from the **Digital Twin (DT)**.
+
+### 1. Physical Twin (PT) VM
+This VM hosts the actual network and the SDN controller.
+
+1. **Start the Ryu Controller**:
+   Run the script to initialize the controller with REST support and link monitoring:
+   ```bash
+   ./start_ryu.sh
+   ```
+2. **Start the Mininet Topology**:
+   In a separate terminal, create the physical network:
+   ```bash
+   sudo python3 src/utils/custom_topo.py
+   ```
+
+### 2. Digital Twin (DT) VM
+This VM hosts the system intelligence (ML) and the control dashboard.
+
+1. **Configure the Physical Twin IP**:
+   Set the PT VM's IP address so the orchestrator can reach it:
+   ```bash
+   export PT_IP=<PHYSICAL_VM_IP>
+   ```
+2. **Start the Orchestrator**:
+   Launch the main process that handles data collection, predictions, and the web server:
+   ```bash
+   python3 src/controllers/orchestrator.py
+   ```
+
+### 📊 Monitoring
+Once everything is running, the dashboard will be accessible from the Digital Twin VM (or the host if port-forwarding is configured) at:
+`http://<DT_VM_IP>:5000`
 
 ## 📁 Project Structure
 
