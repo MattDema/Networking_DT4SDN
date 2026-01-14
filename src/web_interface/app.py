@@ -762,14 +762,36 @@ DASHBOARD_HTML = """
                     actualData.push(null); // No actual data for future
                 }
                 
-                // Build prediction data array: null for history, then prediction from NOW
+                // Build prediction data array with TREND (not flat!)
+                // Calculate recent trend from last 10 actual points
                 const predData = [];
                 for (let i = 0; i < historyPoints; i++) {
                     predData.push(null);
                 }
-                predData.push(actualHistory[actualHistory.length - 1] || 0); // Start from current
-                for (let i = 0; i < predictionPoints; i++) {
-                    predData.push(predictedKB); // Flat prediction line
+                
+                const currentVal = actualHistory[actualHistory.length - 1] || 0;
+                const targetVal = predictedKB;
+                
+                // Calculate trend (slope) from recent history
+                let trend = 0;
+                if (actualHistory.length >= 5) {
+                    const recent = actualHistory.slice(-10);
+                    const start = recent.slice(0, 3).reduce((a,b) => a+b, 0) / 3;
+                    const end = recent.slice(-3).reduce((a,b) => a+b, 0) / 3;
+                    trend = (end - start) / recent.length;
+                }
+                
+                // Project forward with trend, easing toward predicted state
+                predData.push(currentVal); // NOW point
+                for (let i = 1; i <= predictionPoints; i++) {
+                    // Blend between trend continuation and target state
+                    const trendValue = currentVal + trend * i;
+                    const blendFactor = Math.min(1, i / 30); // Ease over 30 seconds
+                    const blendedValue = trendValue * (1 - blendFactor) + targetVal * blendFactor;
+                    
+                    // Add some randomness for natural look
+                    const noise = (Math.random() - 0.5) * targetVal * 0.1;
+                    predData.push(Math.max(0, blendedValue + noise));
                 }
                 
                 // Update chart data
@@ -974,36 +996,45 @@ def api_prediction():
                 'color': '#666666'
             })
         
-        # CRITICAL FIX: Group by timestamp first, then calculate deltas
-        # The data has multiple entries per timestamp (one per port/switch)
-        # We need to: 1) Group by timestamp, 2) Sum bytes, 3) Calculate delta
+        # CRITICAL FIX v2: Calculate deltas PER PORT, then sum
+        # Each (dpid, port) has its own cumulative counter
+        # We need to: 1) Group by (dpid,port,timestamp), 2) Calc delta per port, 3) Sum per timestamp
         
         from collections import defaultdict
-        timestamp_bytes = defaultdict(int)
+        
+        # Structure: {(dpid, port): {timestamp: bytes}}
+        port_data = defaultdict(lambda: defaultdict(int))
         
         for entry in traffic_history:
+            dpid = entry.get('dpid', 0)
+            port = entry.get('port_no', 0)
             ts = entry.get('timestamp', '')
             total_bytes = entry.get('tx_bytes', 0) + entry.get('rx_bytes', 0)
-            timestamp_bytes[ts] += total_bytes
+            port_data[(dpid, port)][ts] = total_bytes
         
-        # Sort timestamps and calculate deltas
-        sorted_timestamps = sorted(timestamp_bytes.keys())
+        # Get all unique timestamps
+        all_timestamps = set()
+        for port_key in port_data:
+            all_timestamps.update(port_data[port_key].keys())
+        sorted_timestamps = sorted(all_timestamps)
+        
+        # Calculate delta per timestamp (sum of deltas across all ports)
         bytes_per_second = []
         
         for i in range(1, len(sorted_timestamps)):
             prev_ts = sorted_timestamps[i-1]
             curr_ts = sorted_timestamps[i]
             
-            prev_bytes = timestamp_bytes[prev_ts]
-            curr_bytes = timestamp_bytes[curr_ts]
+            total_delta = 0
+            for port_key in port_data:
+                prev_bytes = port_data[port_key].get(prev_ts, 0)
+                curr_bytes = port_data[port_key].get(curr_ts, 0)
+                
+                if prev_bytes > 0 and curr_bytes >= prev_bytes:
+                    delta = curr_bytes - prev_bytes
+                    total_delta += delta
             
-            delta = curr_bytes - prev_bytes
-            
-            # Only add positive deltas (counter might reset)
-            if delta >= 0:
-                bytes_per_second.append(delta)
-            else:
-                bytes_per_second.append(0)
+            bytes_per_second.append(total_delta)
         
         if not bytes_per_second:
             bytes_per_second = [0]
