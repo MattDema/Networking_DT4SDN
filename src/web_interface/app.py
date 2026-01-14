@@ -158,7 +158,8 @@ def index():
             reference_max = max(current_max_kb, 50.0) 
 
             for row, kb_val in row_data:
-                key = f"s{row['dpid']}:p{row['port']}"
+                # CHANGED FROM :p TO :eth
+                key = f"s{row['dpid']}:eth{row['port']}"
                 
                 # Calculate ratio against the current peak
                 ratio = kb_val / reference_max
