@@ -643,75 +643,80 @@ DASHBOARD_HTML = """
             }
         }
         
-        // ===== PREDICTION CHART =====
+        // ===== PREDICTION CHART (IMPROVED) =====
         const ctx = document.getElementById('predictionChart');
         let predictionChart = null;
-        let actualData = [];
-        let predictedData = [];
-        const maxDataPoints = 120;  // 2 minutes of history
+        const historyPoints = 60;    // 60 seconds of history
+        const predictionPoints = 60; // 60 seconds of prediction
+        const totalPoints = historyPoints + predictionPoints;
         
-        // State colors
-        const stateColors = {
-            'NORMAL': '#27ae60',
-            'ELEVATED': '#f39c12', 
-            'HIGH': '#e67e22',
-            'CRITICAL': '#e74c3c'
-        };
+        // Data storage
+        let actualHistory = [];  // Past 60 seconds
+        let lastPrediction = null;
         
         function initChart() {
+            // Create labels: -60s to +60s
+            const labels = [];
+            for (let i = -historyPoints; i <= predictionPoints; i++) {
+                if (i === 0) labels.push('NOW');
+                else if (i % 15 === 0) labels.push(i + 's');
+                else labels.push('');
+            }
+            
             predictionChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: [],
+                    labels: labels,
                     datasets: [
                         {
                             label: 'Physical (Actual)',
-                            data: [],
+                            data: new Array(totalPoints + 1).fill(null),
                             borderColor: '#007bff',
-                            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                            backgroundColor: 'rgba(0, 123, 255, 0.15)',
                             fill: true,
-                            tension: 0.4,
+                            tension: 0.3,
                             pointRadius: 0,
-                            borderWidth: 2
+                            borderWidth: 2.5
                         },
                         {
                             label: 'Digital (Predicted)',
-                            data: [],
+                            data: new Array(totalPoints + 1).fill(null),
                             borderColor: '#e74c3c',
-                            borderDash: [5, 5],
-                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            borderDash: [8, 4],
+                            backgroundColor: 'rgba(231, 76, 60, 0.15)',
                             fill: true,
-                            tension: 0.4,
+                            tension: 0.3,
                             pointRadius: 0,
-                            borderWidth: 2
+                            borderWidth: 2.5
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    animation: { duration: 0 },
+                    animation: false,
                     interaction: { intersect: false, mode: 'index' },
                     scales: {
                         x: {
                             display: true,
-                            title: { display: true, text: 'Time (seconds ago)' },
-                            ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-secondary') }
+                            title: { display: true, text: 'Time (seconds)', font: { size: 11 } },
+                            grid: { 
+                                color: (ctx) => ctx.tick.label === 'NOW' ? 'rgba(255,255,255,0.5)' : 'rgba(128,128,128,0.2)',
+                                lineWidth: (ctx) => ctx.tick.label === 'NOW' ? 2 : 1
+                            }
                         },
                         y: {
                             display: true,
-                            title: { display: true, text: 'Bandwidth (KB/s)' },
+                            title: { display: true, text: 'Bandwidth (KB/s)', font: { size: 11 } },
                             beginAtZero: true,
-                            ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-secondary') }
+                            grid: { color: 'rgba(128,128,128,0.2)' }
                         }
                     },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
-                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + ' KB/s';
-                                }
+                                label: (ctx) => ctx.dataset.label + ': ' + (ctx.parsed.y ? ctx.parsed.y.toFixed(1) : '0') + ' KB/s'
                             }
                         }
                     }
@@ -724,35 +729,54 @@ DASHBOARD_HTML = """
                 const response = await fetch('/api/prediction');
                 const data = await response.json();
                 
-                if (data.error) {
-                    document.getElementById('prediction-status').textContent = 'No data';
+                if (data.error && !data.current_traffic) {
+                    document.getElementById('prediction-status').textContent = 'Waiting...';
                     document.getElementById('prediction-status').style.background = '#666';
                     return;
                 }
                 
                 // Update status badge
                 const statusEl = document.getElementById('prediction-status');
-                statusEl.textContent = data.state + ' (' + (data.confidence * 100).toFixed(0) + '%)';
-                statusEl.style.background = data.color;
+                const conf = data.confidence ? (data.confidence * 100).toFixed(0) : '50';
+                statusEl.textContent = data.state + ' (' + conf + '%) → ' + data.prediction_horizon + 's ahead';
+                statusEl.style.background = data.color || '#666';
                 
-                // Add new data point
-                const now = new Date().toLocaleTimeString();
+                // Convert to KB/s
                 const actualKB = data.current_traffic ? data.current_traffic / 1000 : 0;
-                const predictedKB = data.estimated_bandwidth / 1000;
+                const predictedKB = data.estimated_bandwidth ? data.estimated_bandwidth / 1000 : actualKB;
                 
-                predictionChart.data.labels.push(now);
-                predictionChart.data.datasets[0].data.push(actualKB);
-                predictionChart.data.datasets[1].data.push(predictedKB);
-                
-                // Keep only last N points
-                if (predictionChart.data.labels.length > maxDataPoints) {
-                    predictionChart.data.labels.shift();
-                    predictionChart.data.datasets[0].data.shift();
-                    predictionChart.data.datasets[1].data.shift();
+                // Add to history
+                actualHistory.push(actualKB);
+                if (actualHistory.length > historyPoints) {
+                    actualHistory.shift();
                 }
                 
-                // Update predicted line color based on state
-                predictionChart.data.datasets[1].borderColor = data.color;
+                // Build actual data array: history up to NOW, then null for future
+                const actualData = [];
+                for (let i = 0; i < historyPoints - actualHistory.length; i++) {
+                    actualData.push(null);
+                }
+                actualData.push(...actualHistory);
+                actualData.push(actualHistory[actualHistory.length - 1]); // NOW point
+                for (let i = 0; i < predictionPoints; i++) {
+                    actualData.push(null); // No actual data for future
+                }
+                
+                // Build prediction data array: null for history, then prediction from NOW
+                const predData = [];
+                for (let i = 0; i < historyPoints; i++) {
+                    predData.push(null);
+                }
+                predData.push(actualHistory[actualHistory.length - 1] || 0); // Start from current
+                for (let i = 0; i < predictionPoints; i++) {
+                    predData.push(predictedKB); // Flat prediction line
+                }
+                
+                // Update chart data
+                predictionChart.data.datasets[0].data = actualData;
+                predictionChart.data.datasets[1].data = predData;
+                predictionChart.data.datasets[1].borderColor = data.color || '#e74c3c';
+                predictionChart.data.datasets[1].backgroundColor = (data.color || '#e74c3c') + '25';
                 
                 predictionChart.update('none');
                 
@@ -765,14 +789,11 @@ DASHBOARD_HTML = """
         if (ctx) {
             initChart();
             updateChart();
-            // Update chart every 1 second
-            setInterval(updateChart, 1000);
+            // Update chart every 2 seconds (less laggy)
+            setInterval(updateChart, 2000);
         }
         
-        // Auto-refresh page every 30 seconds (not 3 - too fast with chart)
-        setTimeout(function() {
-            window.location.reload();
-        }, 30000);
+        // No page refresh - chart handles updates via AJAX
     </script>
 </body>
 </html>
