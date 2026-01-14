@@ -1,13 +1,16 @@
 # physical_controller.py
 from ryu.base import app_manager
 from ryu.controller import ofp_event
-from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, DEAD_DISPATCHER
-from ryu.controller.handler import set_ev_cls
+from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet, ethernet, ether_types
 from ryu.app.wsgi import ControllerBase, WSGIApplication, route
 from webob import Response
 import json
+
+# NEW IMPORTS FOR REAL-TIME TOPOLOGY
+from ryu.topology import event, switches
+from ryu.topology.api import get_switch, get_link, get_host
 
 
 class PhysicalTwinController(app_manager.RyuApp):
@@ -18,13 +21,10 @@ class PhysicalTwinController(app_manager.RyuApp):
         super(PhysicalTwinController, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         
-        # Store topology metadata (received from Mininet script)
+        # We still keep the metadata for the "Type" (e.g. "Linear")
+        # But switches and links will be overwritten by live discovery
         self.topology_metadata = {"type": "Unknown", "switches": [], "links": []}
-        
-        # Live tracking of link status (dpid -> port_no -> is_live)
-        self.port_status = {} 
 
-        # Initialize WSGI for REST API
         wsgi = kwargs['wsgi']
         wsgi.register(TopologyController, {'physical_controller': self})
 
@@ -103,66 +103,65 @@ class PhysicalTwinController(app_manager.RyuApp):
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
 
-    @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)
-    def port_status_handler(self, ev):
-        """Handle link up/down events"""
-        msg = ev.msg
-        dp = msg.datapath
-        ofp = dp.ofproto
-        port = msg.desc
-        
-        dpid = dp.id
-        port_no = port.port_no
-        
-        # Check if port is down (LINK_DOWN bit set)
-        is_down = (port.state & ofp.OFPPS_LINK_DOWN)
-        status = "DOWN" if is_down else "UP"
-        
-        self.logger.info(f"EVENT: Switch s{dpid} Port {port_no} is {status}")
-        
-        if dpid not in self.port_status:
-            self.port_status[dpid] = {}
-        
-        self.port_status[dpid][port_no] = (not is_down)
-
-    
     # --- Helper methods for REST Controller ---
     def set_topology(self, data):
-        self.topology_metadata = data
-        self.logger.info(f"Topology metadata updated via API: {data.get('type')}")
+        # We only care about the "type" and maybe hosts/names from the static file
+        # The links/switches will be ignored in favor of live discovery
+        self.topology_metadata["type"] = data.get("type", "Unknown")
+        # We can keep hosts from static config as a backup since Ryu takes time to discover hosts
+        if "hosts" in data:
+            self.topology_metadata["static_hosts"] = data["hosts"]
+        self.logger.info(f"Topology type updated: {self.topology_metadata['type']}")
 
     def get_topology(self):
-        """Return topology mixed with live status"""
-        live_topo = self.topology_metadata.copy()
+        """
+        Return Hybrid Topology:
+        - Type: from static JSON
+        - Switches/Links: from Live Ryu Discovery (LLDP)
+        """
         
-        # Create a new list for links to inject status
-        updated_links = []
+        # 1. Discover Switches Live
+        # get_switch(self) returns list of topology.switches.Switch objects
+        ryu_switches = get_switch(self, None)
+        live_switches = [f"s{s.dp.id}" for s in ryu_switches]
         
-        # Original format from Mininet: [["s1", "s2", {}], ["s2", "s3", {}]] or similar
-        # We need to map node names to dpid to check status
-        # Note: This is an approximation. Mininet script sends names "s1", "s2".
-        # We assume sX corresponds to dpid X.
+        # 2. Discover Links Live
+        # get_link(self) returns list of topology.switches.Link objects
+        ryu_links = get_link(self, None)
+        live_links = []
+        for l in ryu_links:
+            src = f"s{l.src.dpid}"
+            dst = f"s{l.dst.dpid}"
+            live_links.append([src, dst])
+            
+        # 3. Hosts (Combination)
+        # Ryu discovers hosts only after they send packets
+        # For better UX, we use the static list if available, or empty
+        live_hosts = self.topology_metadata.get("static_hosts", [])
         
-        if 'links' in live_topo:
-            for link in live_topo['links']:
-                # link is usually [node1, node2, opts]
-                node1, node2 = link[0], link[1]
-                
-                status = "UP"
-                
-                # Check if this link is affected by any DOWN port
-                # We simply check if either side of the link has a down port? 
-                # Ideally, we need to know WHICH port connects s1 to s2.
-                # Since we don't have the full graph here, we will just mark the link
-                # if we detect a port down event recently?
-                
-                # BETTER APPROACH FOR VISUALIZATION:
-                # We return the raw 'port_status' to the Dashboard.
-                # Let the Dashboard figure out which link is down visually.
-                updated_links.append(link)
+        # Note: We need to manually add links from Hosts to Switches if we rely on static host list
+        # Because Ryu get_link() only returns Switch-to-Switch links.
+        # To simplify: we will reuse static links that involve hosts ('h1'), 
+        # but replace switch-switch links with live ones.
         
-        live_topo['port_status'] = self.port_status
-        return live_topo
+        final_links = []
+        
+        # Add live switch-switch links
+        final_links.extend(live_links)
+        
+        # Add cached host links from the static metadata (since we can't discover them easily instantly)
+        if "links" in self.topology_metadata:
+            for link in self.topology_metadata["links"]:
+                u, v = link[0], link[1]
+                if u.startswith('h') or v.startswith('h'):
+                    final_links.append(link)
+
+        return {
+            "type": self.topology_metadata["type"],
+            "switches": live_switches,
+            "hosts": live_hosts,
+            "links": final_links
+        }
 
 
 class TopologyController(ControllerBase):

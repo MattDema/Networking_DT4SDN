@@ -173,8 +173,8 @@
                         id: sw, 
                         label: sw.toUpperCase(), 
                         group: 'switch',
-                        image: 'https://img.icons8.com/ios-filled/50/000000/switch.png', 
-                        shape: 'image' 
+                        image: 'https://img.icons8.com/ios-filled/50/000000/switch.png',
+                        shape: 'image'
                     });
                 });
             }
@@ -182,13 +182,7 @@
             // 2. Add Hosts
             if (rawTopo.hosts) {
                 rawTopo.hosts.forEach(host => {
-                    nodesDataSet.add({
-                        id: host, 
-                        label: host.toUpperCase(), 
-                        group: 'host', 
-                        shape: 'dot', 
-                        color: '#e74c3c'
-                    });
+                    nodesDataSet.add({ id: host, label: host.toUpperCase(), group: 'host', shape: 'dot', color: '#e74c3c' });
                 });
             }
 
@@ -197,16 +191,9 @@
                 rawTopo.links.forEach(link => {
                     let fromNode = link[0];
                     let toNode = link[1];
-                    // IMPORTANT: Unique ID for edge to help updates
                     let edgeId = fromNode + "-" + toNode; 
                     edgesDataSet.add({ id: edgeId, from: fromNode, to: toNode });
                 });
-            }
-            
-            // Handle Port Status (Naive implementation)
-            // If rawTopo.port_status exists, we could highlight problematic switches
-            if (rawTopo.port_status) {
-                 // Logic to turn switch red if it has down ports?
             }
         }
 
