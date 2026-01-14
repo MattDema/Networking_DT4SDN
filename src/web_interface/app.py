@@ -1018,16 +1018,34 @@ def api_prediction():
         # If we have a predictor with enough data, use it
         if state_predictor and len(bytes_per_second) >= 10:
             # Pad if needed
-            if len(bytes_per_second) < state_predictor.sequence_length:
-                padding = [bytes_per_second[0]] * (state_predictor.sequence_length - len(bytes_per_second))
-                bytes_per_second = padding + bytes_per_second
+            seq_len = state_predictor.sequence_length
+            if len(bytes_per_second) < seq_len:
+                padding = [bytes_per_second[0]] * (seq_len - len(bytes_per_second))
+                input_data = padding + bytes_per_second
+                print(f"[ML] Padded: {len(bytes_per_second)} -> {len(input_data)} samples")
+            else:
+                input_data = bytes_per_second[-seq_len:]
             
-            historical_data = np.array(bytes_per_second[-state_predictor.sequence_length:], dtype=np.float32)
+            historical_data = np.array(input_data, dtype=np.float32)
+            
+            # Debug: show input stats
+            print(f"[ML] Input stats: min={historical_data.min():.0f}, max={historical_data.max():.0f}, "
+                  f"mean={historical_data.mean():.0f}, std={historical_data.std():.0f}")
+            
             result = state_predictor.predict(historical_data)
+            
+            # Debug: show prediction
+            print(f"[ML] Prediction: {result['state']} ({result['confidence']*100:.1f}%), "
+                  f"Est BW: {result['estimated_bandwidth']:,.0f} B/s")
+            
             result['current_traffic'] = current_traffic
+            result['avg_traffic'] = avg_traffic  # Add avg for display
             result['timestamp'] = time.time()
+            result['model_used'] = True
             return jsonify(result)
         else:
+            reason = "no predictor" if not state_predictor else f"only {len(bytes_per_second)} samples"
+            print(f"[FALLBACK] Using threshold-based: {reason}")
             # Fallback: simple threshold-based estimation
             # These thresholds are for bytes/second
             if avg_traffic < 100000:  # < 100 KB/s
