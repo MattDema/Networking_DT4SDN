@@ -1,5 +1,13 @@
+// --- VIS.JS TOPOLOGY VISUALIZATION ---
+// Initialize these at the top level so they are available to safe scopes
+let network = null;
+let nodesDataSet = new vis.DataSet();
+let edgesDataSet = new vis.DataSet();
+
 // --- THEME HANDLING ---
 function updateThemeUI(theme) {
+    if (!document.body) return; // Safety check
+
     const isLight = theme === 'light';
     document.body.setAttribute('data-theme', theme);
     const icon = document.getElementById('theme-icon');
@@ -17,15 +25,11 @@ function toggleTheme() {
     updateThemeUI(newTheme);
 }
 
-// Apply theme immediately on load
-const savedTheme = localStorage.getItem('theme') || 'light';
-updateThemeUI(savedTheme);
-
-
-// --- VIS.JS TOPOLOGY VISUALIZATION ---
-let network = null;
-let nodesDataSet = new vis.DataSet();
-let edgesDataSet = new vis.DataSet();
+// Apply theme safely when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    updateThemeUI(savedTheme);
+});
 
 function drawTopology(rawTopo) {
     if (!rawTopo) {
