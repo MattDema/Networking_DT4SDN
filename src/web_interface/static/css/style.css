@@ -273,13 +273,15 @@ td {
 
 tr:hover { background: var(--table-hover); }
 
-/* Updated: Map code style from Python file to .code-cell class */
+/* Stile unificato per sembrare codice (preso dal riferimento + classe .code-cell) */
 code, .code-cell {
     background: var(--bg-primary);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace; /* Font codice essenziale */
+    color: var(--text-primary); /* Assicura leggibilità */
+    display: inline-block; /* Fix per padding corretto dentro le celle */
 }
 
 .no-data { 
@@ -437,9 +439,4 @@ code, .code-cell {
 [data-theme="dark"] .pred-card.high {
     background-color: rgba(220, 53, 69, 0.3);
     color: #ea868f;
-}
-
-/* Reset broad monospace rule */
-.table-container td {
-    font-family: inherit;
 }
