@@ -116,13 +116,21 @@ class PhysicalTwinController(app_manager.RyuApp):
         ryu_switches = get_switch(self, None)
         live_switches = [f"s{s.dp.id}" for s in ryu_switches]
         
-        # 2. Discover Links Live (S-S only)
+        # 2. Discover Links Live (S-S only) - DEDUPLICATED
         ryu_links = get_link(self, None)
         live_links = []
+        seen_pairs = set()
+
         for l in ryu_links:
             src = f"s{l.src.dpid}"
             dst = f"s{l.dst.dpid}"
-            live_links.append([src, dst])
+            
+            # Create a sorted tuple representing the link regardless of direction
+            link_pair = tuple(sorted((src, dst)))
+            
+            if link_pair not in seen_pairs:
+                live_links.append([src, dst])
+                seen_pairs.add(link_pair)
             
         # 3. Hosts & Host Links (Static Fallback)
         final_hosts = self.topology_metadata.get("hosts", [])
@@ -138,7 +146,6 @@ class PhysicalTwinController(app_manager.RyuApp):
             u, v = link[0], link[1]
             
             # Check if u or v is a host (i.e., not in the static switch list)
-            # The static switch list is reliable for names like "s1", "s2".
             u_is_switch = (u in static_switches_list)
             v_is_switch = (v in static_switches_list)
             
@@ -148,7 +155,7 @@ class PhysicalTwinController(app_manager.RyuApp):
 
         return {
             "type": self.topology_metadata.get("type", "Unknown"),
-            "switches": live_switches if live_switches else static_switches_list, # Fallback if live detection empty
+            "switches": live_switches if live_switches else static_switches_list,
             "hosts": final_hosts,
             "links": final_links
         }
