@@ -16,7 +16,7 @@ class CustomTopo(Topo):
         Topo.__init__(self)
         
         host_config = dict(inNamespace=True)
-        link_config = dict()
+        link_config = dict(bw=30)
 """
 
 MAIN_FUNCTION = """

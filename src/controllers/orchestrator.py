@@ -16,6 +16,7 @@ project_root= os.path.dirname(src_dir)
 from database.db_manager import get_db
 from ml_models.traffic_predictor import TrafficPredictor
 from web_interface.app import start_web_server, get_active_switches, get_hosts, RYU_API_URL
+from utils.traffic_manager import TrafficManager
 
 # --- CONFIGURATION ---
 COLLECTION_INTERVAL = 2  # How often to read from Physical Twin
@@ -41,6 +42,24 @@ MODELS = {
 }
 
 LINK_BW_MBPS = 30
+
+
+# --- TOPOLOGY CONFIGURATION ---
+CURRENT_TOPO_NAME = "GENERATED_MESH_3" 
+
+REDUNDANCY_CONFIG = {
+    "GENERATED_MESH_3": {
+        # Switch 1 usually sends to Switch 2 via Port 1.
+        # If that fails, it reroutes to Switch 3 via Port 2.
+        1: 2,  
+        
+        # Switch 3 is the "Detour Switch". 
+        # If it gets congested sending to Switch 2 via Port 2 (direct), 
+        # it could reroute back to Switch 1 via Port 1 (though that's a loop, so be careful).
+        # For this demo, we only need to heal Switch 1.
+    }
+}
+
 
 # Helper to convert Mbps -> Bytes per Prediction Interval
 def mbps_to_bytes(mbps, interval):
@@ -138,6 +157,7 @@ def run_prediction_loop():
 
     # --- 2. START LOOP ---
     db = get_db()
+    traffic_manager = TrafficManager()
 
     while True:
         try:
@@ -182,10 +202,37 @@ def run_prediction_loop():
 
                 if estimated_bps > limit_ddos_bps:
                     current_scenario = 'DDOS'
+                # If is possible then reroute the traffic to another link
                     active_model = predictors.get('DDOS')
+                # Check if the switch has a backup in this topology
+                    topo_config = REDUNDANCY_CONFIG.get(CURRENT_TOPO_NAME, {})
+                    backup_port = topo_config.get(dpid)
+                    if backup_port:
+                        print(f"{current_scenario} Detected on s{dpid}! Rerouting to Backup Port {backup_port}...")
+                        traffic_manager.reroute_flow(
+                            dpid=dpid,
+                            match_dst_ip="10.0.0.2", # Ideally, make this dynamic too
+                            new_out_port=backup_port
+                        )
+                    else:
+                        print(f"{current_scenario} Detected, but no backup path defined for s{dpid} in {CURRENT_TOPO_NAME}.")
+
                 elif estimated_bps > limit_cong_bps:
                     current_scenario = 'CONGESTION'
+                # If is possible then reroute the traffic to another link
                     active_model = predictors.get('CONGESTION')
+                # Check if the switch has a backup in this topology
+                    topo_config = REDUNDANCY_CONFIG.get(CURRENT_TOPO_NAME, {})
+                    backup_port = topo_config.get(dpid)
+                    if backup_port:
+                        print(f"{current_scenario} Detected on s{dpid}! Rerouting to Backup Port {backup_port}...")
+                        traffic_manager.reroute_flow(
+                            dpid=dpid,
+                            match_dst_ip="10.0.0.2", # Ideally, make this dynamic too
+                            new_out_port=backup_port
+                        )
+                    else:
+                        print(f"{current_scenario} Detected, but no backup path defined for s{dpid} in {CURRENT_TOPO_NAME}.")
 
                 if active_model is None:
                     print("Error: No models available.")
