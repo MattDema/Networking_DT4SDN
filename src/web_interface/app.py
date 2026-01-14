@@ -953,32 +953,46 @@ def api_prediction():
                 'color': '#666666'
             })
         
-        # CRITICAL FIX: Calculate DELTAS (bytes per second) not cumulative!
-        # The database stores cumulative counters, we need the difference
-        bytes_per_second = []
-        prev_bytes = None
+        # CRITICAL FIX: Group by timestamp first, then calculate deltas
+        # The data has multiple entries per timestamp (one per port/switch)
+        # We need to: 1) Group by timestamp, 2) Sum bytes, 3) Calculate delta
+        
+        from collections import defaultdict
+        timestamp_bytes = defaultdict(int)
         
         for entry in traffic_history:
+            ts = entry.get('timestamp', '')
             total_bytes = entry.get('tx_bytes', 0) + entry.get('rx_bytes', 0)
+            timestamp_bytes[ts] += total_bytes
+        
+        # Sort timestamps and calculate deltas
+        sorted_timestamps = sorted(timestamp_bytes.keys())
+        bytes_per_second = []
+        
+        for i in range(1, len(sorted_timestamps)):
+            prev_ts = sorted_timestamps[i-1]
+            curr_ts = sorted_timestamps[i]
             
-            if prev_bytes is not None:
-                # Calculate bytes transferred since last sample
-                delta = total_bytes - prev_bytes
-                # Only add positive deltas (counter might reset)
-                if delta >= 0:
-                    bytes_per_second.append(delta)
-                else:
-                    bytes_per_second.append(0)  # Counter reset
+            prev_bytes = timestamp_bytes[prev_ts]
+            curr_bytes = timestamp_bytes[curr_ts]
             
-            prev_bytes = total_bytes
+            delta = curr_bytes - prev_bytes
+            
+            # Only add positive deltas (counter might reset)
+            if delta >= 0:
+                bytes_per_second.append(delta)
+            else:
+                bytes_per_second.append(0)
         
         if not bytes_per_second:
             bytes_per_second = [0]
         
         current_traffic = bytes_per_second[-1] if bytes_per_second else 0
+        avg_traffic = np.mean(bytes_per_second) if bytes_per_second else 0
         
         # Debug logging
-        print(f"[API] Samples: {len(bytes_per_second)}, Current: {current_traffic:,.0f} B/s, Avg: {np.mean(bytes_per_second):,.0f} B/s")
+        print(f"[API] Timestamps: {len(sorted_timestamps)}, Deltas: {len(bytes_per_second)}, "
+              f"Current: {current_traffic:,.0f} B/s, Avg: {avg_traffic:,.0f} B/s")
         
         # If we have a predictor with enough data, use it
         if state_predictor and len(bytes_per_second) >= 10:
@@ -994,8 +1008,6 @@ def api_prediction():
             return jsonify(result)
         else:
             # Fallback: simple threshold-based estimation
-            avg_traffic = np.mean(bytes_per_second) if bytes_per_second else 0
-            
             # These thresholds are for bytes/second
             if avg_traffic < 100000:  # < 100 KB/s
                 state, color = 'NORMAL', '#27ae60'
