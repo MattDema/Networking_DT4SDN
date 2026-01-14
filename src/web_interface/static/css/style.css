@@ -372,46 +372,45 @@ code {
     flex: 0 0 250px; /* Force sidebar width */
 }
 
-/* Vis.js Network Container */
+/* Vis.js Network Container - Ensure height is explicit and background visible */
 #mynetwork {
     width: 100%;
-    height: 400px;
-    border: 1px solid var(--border-color);
-    background-color: var(--card-bg);
+    height: 500px; /* Increased height for better visibility */
+    border: 1px solid var(--border);
+    background-color: var(--bg-card); /* Use variable instead of hardcoded */
     border-radius: 8px;
+    display: block; /* Ensure block display */
 }
 
-/* AI Forecast Grid - Compact */
+/* AI Forecast - Fix width issues */
 .prediction-grid {
-    display: grid;
-    grid-template-columns: 1fr; /* Single column stack */
+    display: flex;
+    flex-direction: column;
     gap: 8px;
-    max-height: 250px;
+    /* Remove strict max-height if it causes cutoffs, or increase it */
+    max-height: 400px; 
     overflow-y: auto;
+    padding-right: 5px; /* Space for scrollbar */
 }
 
 .pred-card {
-    background: var(--bg-color);
-    padding: 8px;
-    border-radius: 4px;
-    border-left: 3px solid #ccc;
-    font-size: 0.8em;
+    /* Ensure card doesn't stretch too much horizontally but fills container */
+    width: 100%; 
+    background: var(--bg-primary); /* Slightly different contrast */
+    padding: 10px;
+    border-radius: 6px;
+    border-left: 4px solid #ccc; /* Thicker border */
+    font-size: 0.85em;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-.pred-card.low { border-left-color: #2ecc71; }
-.pred-card.medium { border-left-color: #f1c40f; }
-.pred-card.high { border-left-color: #e74c3c; }
-
-/* Status Badges */
-.stat-badge {
-    display: inline-block;
-    background: var(--bg-color);
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.85em;
-    font-weight: bold;
-    border: 1px solid var(--border-color);
+/* Packet Flows Table - Fix height */
+.table-container {
+    width: 100%;
+    max-height: 400px; /* Increased from 200px */
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
 }
