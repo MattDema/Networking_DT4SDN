@@ -118,7 +118,8 @@ class TopologyController(ControllerBase):
     def get_metadata(self, req, **kwargs):
         """Dashboard calls this to get current topology info"""
         body = json.dumps(self.physical_controller.get_topology())
-        return Response(content_type='application/json', body=body)
+        # FIX: Specificare charset='utf-8' per evitare l'errore webob
+        return Response(content_type='application/json', charset='utf-8', body=body)
 
     @route('topology', '/topology/metadata', methods=['POST'])
     def set_metadata(self, req, **kwargs):
@@ -127,6 +128,7 @@ class TopologyController(ControllerBase):
             # Parse JSON body
             data = json.loads(req.body) if req.body else {}
             self.physical_controller.set_topology(data)
-            return Response(start_response=200, body=json.dumps({"status": "success"}))
+            # FIX: Anche qui specificare charset='utf-8'
+            return Response(content_type='application/json', charset='utf-8', body=json.dumps({"status": "success"}))
         except Exception as e:
             return Response(status=500, body=str(e))
