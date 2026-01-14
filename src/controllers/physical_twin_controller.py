@@ -14,7 +14,6 @@ from ryu.topology.api import get_switch, get_link, get_host
 
 # --- STP IMPORTS ---
 from ryu.lib import stplib
-from ryu.lib import stp
 
 class PhysicalTwinController(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
