@@ -4,33 +4,52 @@
     <title>Digital Twin Orchestrator</title>
     <!-- Link to external CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Link to external JS -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script> 
     <!-- Vis.js for Network Topology -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <style>
+        /* Layout adjustments for the new simpler look */
+        .sidebar { flex: 0 0 250px; }
+        
         #mynetwork {
             width: 100%;
-            height: 350px;
+            height: 400px;
             border: 1px solid var(--border-color);
             background-color: var(--card-bg);
             border-radius: 8px;
         }
+
         .prediction-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 10px;
-            max-height: 300px;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            max-height: 250px;
             overflow-y: auto;
         }
         .pred-card {
             background: var(--bg-color);
-            padding: 10px;
-            border-radius: 6px;
-            border-left: 4px solid #ccc;
-            font-size: 0.85em;
+            padding: 8px;
+            border-radius: 4px;
+            border-left: 3px solid #ccc;
+            font-size: 0.8em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .pred-card.low { border-left-color: #2ecc71; }
         .pred-card.medium { border-left-color: #f1c40f; }
         .pred-card.high { border-left-color: #e74c3c; }
+
+        .stat-badge {
+            display: inline-block;
+            background: var(--bg-color);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: bold;
+            border: 1px solid var(--border-color);
+        }
     </style>
 </head>
 <body data-theme="light">
@@ -49,80 +68,71 @@
     </div>
 
     <div class="main-layout">
-        <!-- Left Column: Database & Stats -->
+        <!-- Left Column: Status & AI -->
         <div class="sidebar">
             <div class="card">
-                <h3>🗄️ Database Storage</h3>
-                <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 12px;">
-                    SQLite storage for historical data.
-                </p>
-                <table style="width: 100%; font-size: 0.85em;">
-                    <tbody>
-                        <tr><td><code>traffic_stats</code></td><td><strong>{{ db_stats.traffic_stats }}</strong></td></tr>
-                        <tr><td><code>flow_stats</code></td><td><strong>{{ db_stats.flow_stats }}</strong></td></tr>
-                        <tr><td><code>hosts</code></td><td><strong>{{ db_stats.hosts }}</strong></td></tr>
-                    </tbody>
-                </table>
+                <h3>📡 System Status</h3>
+                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.9em;">
+                    <div><span style="color: var(--text-secondary);">Topo:</span> <strong>{{ topo_info.type | title }}</strong></div>
+                    <div><span style="color: var(--text-secondary);">PT IP:</span> <strong>{{ pt_ip }}</strong></div>
+                    <div>
+                        <span style="color: var(--text-secondary);">Status:</span> 
+                        <span class="status-{{ 'connected' if connection_status == 'Connected' else 'disconnected' }}">
+                            {{ connection_status }}
+                        </span>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 5px 0;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Switches:</span>
+                        <span class="stat-badge">{{ topo_info.switches | length }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Clients:</span>
+                        <span class="stat-badge">{{ topo_info.hosts | length }}</span>
+                    </div>
+                </div>
             </div>
 
-            <!-- NEW: AI Forecast Section (Context Aware) -->
             <div class="card" style="flex: 1; display: flex; flex-direction: column;">
-                <h3>🤖 AI Traffic Forecast</h3>
-                <p style="font-size: 0.8em; margin-bottom: 10px;">
-                    Predicted load for current topology (<b>{{ topo_info.type | title }}</b>).
-                </p>
+                <h3 style="font-size: 1em;">🤖 AI Forecast</h3>
                 <div class="prediction-grid">
                     {% if predictions %}
                         {% for key, pred in predictions.items() %}
                         <div class="pred-card {{ pred.level }}">
-                            <div style="font-weight: bold;">{{ key }}</div>
-                            <div style="font-size: 1.2em;">{{ pred.value }}</div>
-                            <div style="color: var(--text-secondary);">{{ pred.status }}</div>
+                            <span><b>{{ key }}</b></span>
+                            <span style="font-weight: bold;">{{ pred.value }}</span>
                         </div>
                         {% endfor %}
                     {% else %}
-                        <p style="font-size: 0.9em; color: var(--text-secondary);">No traffic predictions available yet.</p>
+                        <p style="font-size: 0.8em; color: var(--text-secondary); text-align: center; margin-top: 20px;">
+                            Waiting for traffic...
+                        </p>
                     {% endif %}
                 </div>
             </div>
         </div>
 
-        <!-- Right Column: Visualization & Status -->
+        <!-- Right Column: Visualization ONLY -->
         <div class="main-content">
-            <div class="top-row">
-                <div class="card">
-                    <h3>📡 Status</h3>
-                    <p style="margin: 5px 0; font-size: 0.9em;">PT IP: <strong>{{ pt_ip }}</strong></p>
-                    <p style="margin: 5px 0; font-size: 0.9em;">Topo: <strong>{{ topo_info.type | title }}</strong></p>
-                    <p style="margin: 5px 0; font-size: 0.9em;">
-                        Status: <span class="status-{{ 'connected' if connection_status == 'Connected' else 'disconnected' }}">{{ connection_status }}</span>
-                    </p>
+            <div class="card" style="height: 100%; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3>🗺️ Live Topology</h3>
+                    <button class="btn" style="padding: 4px 8px; font-size: 0.8em;" onclick="location.reload()">Refresh</button>
                 </div>
-                <!-- Controls placeholder -->
-                <div class="card" style="flex-grow: 2;">
-                    <h3>⚡ Quick Actions</h3>
-                    <button class="btn" onclick="location.reload()">Refresh Data</button>
-                </div>
+                <!-- Network Container -->
+                <div id="mynetwork" style="flex-grow: 1;"></div>
             </div>
 
-            <!-- NEW: Topology Graph -->
             <div class="card">
-                <h3>🗺️ Network Topology (Live)</h3>
-                <div id="mynetwork"></div>
-            </div>
-
-            <!-- Flows Table -->
-            <div class="card">
-                <h3>🌊 Active Flows</h3>
-                <div class="table-container">
+                <h3>🌊 Packet Flows</h3>
+                <div class="table-container" style="max-height: 200px;">
                     <table>
                         <thead>
                             <tr>
-                                <th>Switch</th>
-                                <th>Priority</th>
+                                <th>SW</th>
                                 <th>Match</th>
                                 <th>Action</th>
-                                <th>Packets</th>
+                                <th>Pkts</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -130,14 +140,13 @@
                                 {% for flow in flow_list %}
                                 <tr>
                                     <td>S{{ dpid }}</td>
-                                    <td>{{ flow.priority }}</td>
-                                    <td class="code-cell">{{ flow.match }}</td>
-                                    <td class="code-cell">{{ flow.instructions }}</td>
+                                    <td class="code-cell" style="font-size: 0.75em;">{{ flow.match }}</td>
+                                    <td class="code-cell" style="font-size: 0.75em;">{{ flow.instructions }}</td>
                                     <td>{{ flow.packet_count }}</td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
-                                <tr><td colspan="5" style="text-align:center;">No flows detected</td></tr>
+                                <tr><td colspan="4" style="text-align:center; font-size: 0.8em; padding: 10px;">No active flows</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -146,93 +155,15 @@
         </div>
     </div>
 
+    <!-- INITIALIZATION SCRIPT -->
     <script>
-        function toggleTheme() {
-            const body = document.body;
-            const currentTheme = body.getAttribute('data-theme');
-            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-            body.setAttribute('data-theme', newTheme);
-            document.getElementById('theme-icon').textContent = newTheme === 'light' ? '🌙' : '☀️';
-            document.getElementById('theme-text').textContent = newTheme === 'light' ? 'Dark' : 'Light';
-        }
-
-        // --- VIS.JS TOPOLOGY VISUALIZATION ---
-        // Parse data passed from Flask
-        let network = null;
-        let nodesDataSet = new vis.DataSet();
-        let edgesDataSet = new vis.DataSet();
-
-        function drawTopology(rawTopo) {
-            nodesDataSet.clear();
-            edgesDataSet.clear();
-            
-            // 1. Add Switches
-            if (rawTopo.switches) {
-                rawTopo.switches.forEach(sw => {
-                    nodesDataSet.add({
-                        id: sw, 
-                        label: sw.toUpperCase(), 
-                        group: 'switch',
-                        image: 'https://img.icons8.com/ios-filled/50/000000/switch.png',
-                        shape: 'image'
-                    });
-                });
-            }
-
-            // 2. Add Hosts
-            if (rawTopo.hosts) {
-                rawTopo.hosts.forEach(host => {
-                    nodesDataSet.add({ id: host, label: host.toUpperCase(), group: 'host', shape: 'dot', color: '#e74c3c' });
-                });
-            }
-
-            // 3. Add Links
-            if (rawTopo.links) {
-                rawTopo.links.forEach(link => {
-                    let fromNode = link[0];
-                    let toNode = link[1];
-                    let edgeId = fromNode + "-" + toNode; 
-                    edgesDataSet.add({ id: edgeId, from: fromNode, to: toNode });
-                });
-            }
-        }
-
-        // Initial Draw
+        // Pass data from Flask/Jinja to JS function
         const rawTopoParams = {{ topo_info | tojson }};
-        drawTopology(rawTopoParams);
-
-        const container = document.getElementById('mynetwork');
-        const data = { nodes: nodesDataSet, edges: edgesDataSet };
-        const options = {
-            layout: {
-                hierarchical: false,
-                improvedLayout: true
-            },
-            physics: {
-                stabilization: true,
-                barnesHut: {
-                    gravitationalConstant: -2000,
-                    springConstant: 0.04,
-                    springLength: 95
-                }
-            },
-            edges: {
-                color: "#95a5a6",
-                width: 2
-            }
-        };
         
-        if (container) {
-            network = new vis.Network(container, data, options);
-        }
-        
-        // --- AUTO REFRESH LOGIC ---
-        // Reload page every 10 seconds to fetch new state (brute force but effective)
-        // Or better: use fetch() to just update data without refresh
-        setInterval(() => {
-            window.location.reload(); 
-        }, 10000); 
-
+        // Wait for DOM to be ready then init
+        document.addEventListener('DOMContentLoaded', function() {
+            initNetwork(rawTopoParams);
+        });
     </script>
 </body>
 </html>
