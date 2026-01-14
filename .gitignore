@@ -22,14 +22,15 @@ data/logs/*
 docs/previous/
 
 # Models
-models/
+models/b4_classifier
+models/beforeA100
+models/previous
 
 # Tests
 tests/
 
 # Visuals
-visuals/compare_all_scalers.py
-visuals/inspect_scaler.py
+visuals/
 
 # IDE
 .vscode/

@@ -3,7 +3,8 @@ import os
 import sys
 import requests
 import json
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, jsonify
+import time
 
 app = Flask(__name__)
 
@@ -16,6 +17,24 @@ if src_dir not in sys.path:
 
 # Now we can import directly from 'database' (since 'src' is in path)
 from database.db_manager import get_db
+from ml_models.state_predictor import StatePredictor
+import numpy as np
+
+# Initialize state predictor (loaded once at startup)
+state_predictor = None
+try:
+    import glob
+    model_files = glob.glob('models/*_classifier_3050.pt')
+    if model_files:
+        # Use mixed model as default (trained on all patterns)
+        mixed_model = [f for f in model_files if 'mixed' in f]
+        model_path = mixed_model[0] if mixed_model else model_files[0]
+        state_predictor = StatePredictor(model_path)
+        print(f"✓ StatePredictor loaded: {model_path}")
+    else:
+        print("⚠️ No classifier models found in models/")
+except Exception as e:
+    print(f"⚠️ Could not load StatePredictor: {e}")
 
 # --- CONFIGURATION ---
 # We define these here because the Dashboard needs them to fetch live data
@@ -29,6 +48,7 @@ DASHBOARD_HTML = """
 <html>
 <head>
     <title>Digital Twin Orchestrator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg-primary: #f0f0f0;
@@ -562,6 +582,25 @@ DASHBOARD_HTML = """
                 <p class="no-data">No flow data available yet. Generate traffic in Mininet (ping/iperf).</p>
             {% endif %}
         </div>
+
+        <!-- 📈 REAL-TIME PREDICTION GRAPH -->
+        <div class="card full-width">
+            <h3>📈 Traffic Prediction Graph (Physical vs Digital Twin)</h3>
+            <div style="position: relative; height: 350px; width: 100%;">
+                <canvas id="predictionChart"></canvas>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 10px; background: var(--bg-primary); border-radius: 8px;">
+                <div>
+                    <span style="display: inline-block; width: 20px; height: 3px; background: #007bff; margin-right: 5px;"></span>
+                    <span style="font-size: 12px;">Physical (Actual)</span>
+                    <span style="display: inline-block; width: 20px; height: 3px; background: #e74c3c; margin-left: 15px; margin-right: 5px; border-style: dashed;"></span>
+                    <span style="font-size: 12px;">Digital (Predicted)</span>
+                </div>
+                <div id="prediction-status" style="font-size: 12px; padding: 5px 10px; border-radius: 4px; background: var(--accent); color: white;">
+                    Loading...
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -593,10 +632,136 @@ DASHBOARD_HTML = """
             }
         }
         
-        // Auto-refresh every 3 seconds
+        // ===== PREDICTION CHART =====
+        const ctx = document.getElementById('predictionChart');
+        let predictionChart = null;
+        let actualData = [];
+        let predictedData = [];
+        const maxDataPoints = 120;  // 2 minutes of history
+        
+        // State colors
+        const stateColors = {
+            'NORMAL': '#27ae60',
+            'ELEVATED': '#f39c12', 
+            'HIGH': '#e67e22',
+            'CRITICAL': '#e74c3c'
+        };
+        
+        function initChart() {
+            predictionChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Physical (Actual)',
+                            data: [],
+                            borderColor: '#007bff',
+                            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Digital (Predicted)',
+                            data: [],
+                            borderColor: '#e74c3c',
+                            borderDash: [5, 5],
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 0 },
+                    interaction: { intersect: false, mode: 'index' },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: { display: true, text: 'Time (seconds ago)' },
+                            ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-secondary') }
+                        },
+                        y: {
+                            display: true,
+                            title: { display: true, text: 'Bandwidth (KB/s)' },
+                            beginAtZero: true,
+                            ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-secondary') }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + ' KB/s';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        async function updateChart() {
+            try {
+                const response = await fetch('/api/prediction');
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('prediction-status').textContent = 'No data';
+                    document.getElementById('prediction-status').style.background = '#666';
+                    return;
+                }
+                
+                // Update status badge
+                const statusEl = document.getElementById('prediction-status');
+                statusEl.textContent = data.state + ' (' + (data.confidence * 100).toFixed(0) + '%)';
+                statusEl.style.background = data.color;
+                
+                // Add new data point
+                const now = new Date().toLocaleTimeString();
+                const actualKB = data.current_traffic ? data.current_traffic / 1000 : 0;
+                const predictedKB = data.estimated_bandwidth / 1000;
+                
+                predictionChart.data.labels.push(now);
+                predictionChart.data.datasets[0].data.push(actualKB);
+                predictionChart.data.datasets[1].data.push(predictedKB);
+                
+                // Keep only last N points
+                if (predictionChart.data.labels.length > maxDataPoints) {
+                    predictionChart.data.labels.shift();
+                    predictionChart.data.datasets[0].data.shift();
+                    predictionChart.data.datasets[1].data.shift();
+                }
+                
+                // Update predicted line color based on state
+                predictionChart.data.datasets[1].borderColor = data.color;
+                
+                predictionChart.update('none');
+                
+            } catch (err) {
+                console.error('Chart update error:', err);
+            }
+        }
+        
+        // Initialize chart
+        if (ctx) {
+            initChart();
+            updateChart();
+            // Update chart every 1 second
+            setInterval(updateChart, 1000);
+        }
+        
+        // Auto-refresh page every 30 seconds (not 3 - too fast with chart)
         setTimeout(function() {
             window.location.reload();
-        }, 3000);
+        }, 30000);
     </script>
 </body>
 </html>
@@ -751,6 +916,82 @@ def index():
 def db_stats():
     db = get_db()
     return json.dumps(db.get_db_stats(), indent=2)
+
+
+@app.route('/api/prediction')
+def api_prediction():
+    """
+    API endpoint for real-time traffic state prediction.
+    Returns: state, confidence, estimated_bandwidth, color
+    """
+    global state_predictor
+    
+    try:
+        db = get_db()
+        
+        # Get recent traffic data from database
+        traffic_history = db.get_traffic_history(minutes=2)
+        
+        if not traffic_history:
+            return jsonify({
+                'error': 'No traffic data',
+                'state': 'UNKNOWN',
+                'confidence': 0,
+                'estimated_bandwidth': 0,
+                'color': '#666666'
+            })
+        
+        # Extract bytes values (sum across all ports)
+        bytes_per_second = []
+        current_traffic = 0
+        
+        for entry in traffic_history:
+            bytes_val = entry.get('tx_bytes', 0) + entry.get('rx_bytes', 0)
+            bytes_per_second.append(bytes_val)
+            current_traffic = bytes_val  # Last value is current
+        
+        # If we have a predictor, use it
+        if state_predictor and len(bytes_per_second) >= 10:
+            historical_data = np.array(bytes_per_second[-state_predictor.sequence_length:])
+            result = state_predictor.predict(historical_data)
+            result['current_traffic'] = current_traffic
+            result['timestamp'] = time.time()
+            return jsonify(result)
+        else:
+            # Fallback: simple threshold-based estimation
+            avg_traffic = np.mean(bytes_per_second) if bytes_per_second else 0
+            
+            if avg_traffic < 500000:
+                state, color = 'NORMAL', '#27ae60'
+            elif avg_traffic < 1500000:
+                state, color = 'ELEVATED', '#f39c12'
+            elif avg_traffic < 2500000:
+                state, color = 'HIGH', '#e67e22'
+            else:
+                state, color = 'CRITICAL', '#e74c3c'
+            
+            return jsonify({
+                'state': state,
+                'state_id': ['NORMAL', 'ELEVATED', 'HIGH', 'CRITICAL'].index(state),
+                'confidence': 0.5,
+                'estimated_bandwidth': avg_traffic,
+                'current_traffic': current_traffic,
+                'color': color,
+                'prediction_horizon': 60,
+                'timestamp': time.time()
+            })
+            
+    except Exception as e:
+        print(f"Prediction API error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'state': 'ERROR',
+            'confidence': 0,
+            'estimated_bandwidth': 0,
+            'color': '#666666'
+        })
 
 
 def start_web_server(host='0.0.0.0', port=5000):
