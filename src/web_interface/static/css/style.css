@@ -273,11 +273,13 @@ td {
 
 tr:hover { background: var(--table-hover); }
 
-code {
+/* Updated: Map code style from Python file to .code-cell class */
+code, .code-cell {
     background: var(--bg-primary);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
 .no-data { 
@@ -425,19 +427,19 @@ code {
 
 /* Dark Mode Overrides for Pred Cards */
 [data-theme="dark"] .pred-card.low {
-    background-color: rgba(40, 167, 69, 0.25);
-    color: #e0f2e4;
+    background-color: rgba(40, 167, 69, 0.2);
+    color: #75b798;
 }
 [data-theme="dark"] .pred-card.medium {
-    background-color: rgba(255, 193, 7, 0.25);
-    color: #fff3cd;
+    background-color: rgba(255, 193, 7, 0.2);
+    color: #ffda6a;
 }
 [data-theme="dark"] .pred-card.high {
-    background-color: rgba(220, 53, 69, 0.35);
-    color: #f8d7da;
+    background-color: rgba(220, 53, 69, 0.3);
+    color: #ea868f;
 }
 
-/* Force Monospace font for Packet Flows table */
+/* Reset broad monospace rule */
 .table-container td {
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: inherit;
 }
