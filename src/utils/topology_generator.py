@@ -219,7 +219,7 @@ def generate_mesh_topology(num_switches: int, num_hosts: int) -> str:
     # Create switches
     code += f"        # Create {num_switches} switches (fully meshed)\n"
     for i in range(num_switches):
-        code += f'        sconfig = {{"dpid": "%016x" % {i+1}, "stp": True, "fail_mode": "standalone"}}\n'
+        code += f'        sconfig = {{"dpid": "%016x" % {i+1}}}\n'
         code += f'        self.addSwitch("s{i+1}", **sconfig)\n'
     
     # Create hosts

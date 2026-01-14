@@ -12,14 +12,22 @@ import json
 from ryu.topology import event, switches
 from ryu.topology.api import get_switch, get_link, get_host
 
+# --- STP IMPORTS ---
+from ryu.lib import stplib
+from ryu.lib import stp
 
 class PhysicalTwinController(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
-    _CONTEXTS = {'wsgi': WSGIApplication}
+    # Diciamo a Ryu che vogliamo usare il contesto WSGI e la libreria STP
+    _CONTEXTS = {
+        'wsgi': WSGIApplication,
+        'stplib': stplib.Stp
+    }
 
     def __init__(self, *args, **kwargs):
         super(PhysicalTwinController, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
+        self.stp = kwargs['stplib']  # Recuperiamo l'istanza STP
         
         # We still keep the metadata for the "Type" (e.g. "Linear")
         # But switches and links will be overwritten by live discovery
@@ -27,6 +35,11 @@ class PhysicalTwinController(app_manager.RyuApp):
 
         wsgi = kwargs['wsgi']
         wsgi.register(TopologyController, {'physical_controller': self})
+
+        # Configurazione STP di base (opzionale: assegna priorità di default)
+        # Questo aiuta a stabilizzare l'elezione del root bridge
+        # config = {dpid: {'bridge_priority': 32768} for dpid in range(1, 20)}
+        # self.stp.set_config(config)
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -55,7 +68,33 @@ class PhysicalTwinController(app_manager.RyuApp):
                                     match=match, instructions=inst)
         datapath.send_msg(mod)
 
-    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+    def delete_flow(self, datapath):
+        """Cancella tutti i flussi di uno switch (utile quando STP cambia topologia)"""
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        match = parser.OFPMatch()
+        mod = parser.OFPFlowMod(datapath, command=ofproto.OFPFC_DELETE,
+                                out_port=ofproto.OFPP_ANY,
+                                out_group=ofproto.OFPG_ANY,
+                                match=match)
+        datapath.send_msg(mod)
+
+    # --- GESTORE CAMBIO STATO PORTA (STP) ---
+    @set_ev_cls(stplib.EventTopologyChange, MAIN_DISPATCHER)
+    def _topology_change_handler(self, ev):
+        dp = ev.dp
+        dpid_str = dpid_lib.dpid_to_str(dp.id)
+        msg = 'Port state changed in switch: %s' % dpid_str
+        self.logger.debug(msg)
+
+        if dp.id in self.mac_to_port:
+            del self.mac_to_port[dp.id]
+        self.delete_flow(dp)
+
+    # --- GESTORE PACKET IN (MODIFICATO PER STP) ---
+    # Usiamo stplib.EventPacketIn invece di ofp_event.EventOFPPacketIn
+    # Questo assicura che riceveremo pacchetti SOLO se la porta è in stato FORWARD
+    @set_ev_cls(stplib.EventPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
         msg = ev.msg
         datapath = msg.datapath
@@ -74,6 +113,9 @@ class PhysicalTwinController(app_manager.RyuApp):
         dpid = datapath.id
 
         self.mac_to_port.setdefault(dpid, {})
+        self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
+
+        # learn a mac address to avoid FLOOD next time.
         self.mac_to_port[dpid][src] = in_port
 
         if dst in self.mac_to_port[dpid]:
@@ -83,8 +125,11 @@ class PhysicalTwinController(app_manager.RyuApp):
 
         actions = [parser.OFPActionOutput(out_port)]
 
+        # install a flow to avoid packet_in next time
         if out_port != ofproto.OFPP_FLOOD:
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
+            # verify if we have a valid buffer_id, if yes avoid to send both
+            # flow_mod & packet_out
             if msg.buffer_id != ofproto.OFP_NO_BUFFER:
                 self.add_flow(datapath, 1, match, actions, msg.buffer_id)
                 return
@@ -99,7 +144,7 @@ class PhysicalTwinController(app_manager.RyuApp):
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
 
-    # --- Helper methods for REST Controller ---
+    # --- Helper methods for REST Controller (INVARIATI) ---
     def set_topology(self, data):
         self.topology_metadata = data
         self.logger.info(f"Topology metadata updated via API: {data.get('type')}")
@@ -141,15 +186,10 @@ class PhysicalTwinController(app_manager.RyuApp):
         final_links = list(live_links)
         
         # Merge Host Links from Static Metadata
-        # Logic: If a link in static metadata involves a node that is NOT a known switch, it's a host link.
         for link in static_links:
             u, v = link[0], link[1]
-            
-            # Check if u or v is a host (i.e., not in the static switch list)
             u_is_switch = (u in static_switches_list)
             v_is_switch = (v in static_switches_list)
-            
-            # If it's NOT a Switch-to-Switch link, we assume it's a Host link and keep it.
             if not (u_is_switch and v_is_switch):
                 final_links.append(link)
 
@@ -170,17 +210,14 @@ class TopologyController(ControllerBase):
     def get_metadata(self, req, **kwargs):
         """Dashboard calls this to get current topology info"""
         body = json.dumps(self.physical_controller.get_topology())
-        # FIX: Specificare charset='utf-8' per evitare l'errore webob
         return Response(content_type='application/json', charset='utf-8', body=body)
 
     @route('topology', '/topology/metadata', methods=['POST'])
     def set_metadata(self, req, **kwargs):
         """Mininet script calls this to set current topology info"""
         try:
-            # Parse JSON body
             data = json.loads(req.body) if req.body else {}
             self.physical_controller.set_topology(data)
-            # FIX: Anche qui specificare charset='utf-8'
             return Response(content_type='application/json', charset='utf-8', body=json.dumps({"status": "success"}))
         except Exception as e:
             return Response(status=500, body=str(e))
