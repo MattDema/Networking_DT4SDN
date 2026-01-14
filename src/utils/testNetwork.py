@@ -13,7 +13,7 @@ class NetworkTopo(Topo):
         # --- CONFIGURATION ---
         # 10 Mbps limit to match your Orchestrator's Congestion Threshold
         # max_queue_size=100 ensures packets queue up so you can see the queue growing
-        link_config = dict(bw=10, delay='5ms', max_queue_size=100)
+        link_config = dict(bw=30, delay='5ms', max_queue_size=100)
 
         # Keep host links fast (optional) or limit them too. 
         # Here we limit everything for simplicity.
@@ -26,10 +26,12 @@ class NetworkTopo(Topo):
         # Creation of hosts
         h1 = self.addHost('h1')
         h2 = self.addHost('h2')
+        h3 = self.addHost('h3')
 
         # Connect hosts to switches (using the limit)
         self.addLink(h1, s1, **link_config)
-        self.addLink(h2, s3, **link_config)
+        self.addLink(h2, s2, **link_config)
+        self.addLink(h3, s3, **link_config)
 
         # Connect switches (THE BOTTLENECK)
         # Traffic from h1 -> h2 must pass through these 10Mbps links
