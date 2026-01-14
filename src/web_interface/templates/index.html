@@ -42,7 +42,8 @@
                 </div>
             </div>
 
-            <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+            <!-- Removed 'flex: 1' to prevent stretching white space -->
+            <div class="card" style="display: flex; flex-direction: column;">
                 <h3>🤖 AI Forecast</h3>
                 <div class="prediction-grid">
                     {% if predictions %}

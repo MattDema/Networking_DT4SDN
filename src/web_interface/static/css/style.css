@@ -387,30 +387,52 @@ code {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    /* Remove strict max-height if it causes cutoffs, or increase it */
+    /* Limit height but don't force it to be huge if empty */
     max-height: 400px; 
     overflow-y: auto;
-    padding-right: 5px; /* Space for scrollbar */
+    padding-right: 5px; 
 }
 
 .pred-card {
-    /* Ensure card doesn't stretch too much horizontally but fills container */
     width: 100%; 
-    background: var(--bg-primary); /* Slightly different contrast */
+    background: var(--bg-primary); 
     padding: 10px;
     border-radius: 6px;
-    border-left: 4px solid #ccc; /* Thicker border */
+    border-left: 4px solid #ccc;
     font-size: 0.85em;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-/* Packet Flows Table - Fix height */
-.table-container {
-    width: 100%;
-    max-height: 400px; /* Increased from 200px */
-    overflow-y: auto;
-    border: 1px solid var(--border);
-    border-radius: 8px;
+/* AI Forecast Colors - RESTORED */
+.pred-card.low {
+    background-color: rgba(40, 167, 69, 0.15);
+    border-left-color: #28a745;
+    color: #155724;
+}
+.pred-card.medium {
+    background-color: rgba(255, 193, 7, 0.2);
+    border-left-color: #ffc107;
+    color: #856404;
+}
+.pred-card.high {
+    background-color: rgba(220, 53, 69, 0.2);
+    border-left-color: #dc3545;
+    color: #721c24;
+    animation: pulse-red 2s infinite;
+}
+
+/* Dark Mode Overrides for Pred Cards */
+[data-theme="dark"] .pred-card.low {
+    background-color: rgba(40, 167, 69, 0.25);
+    color: #e0f2e4;
+}
+[data-theme="dark"] .pred-card.medium {
+    background-color: rgba(255, 193, 7, 0.25);
+    color: #fff3cd;
+}
+[data-theme="dark"] .pred-card.high {
+    background-color: rgba(220, 53, 69, 0.35);
+    color: #f8d7da;
 }

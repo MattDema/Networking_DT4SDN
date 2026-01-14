@@ -6,7 +6,7 @@ let edgesDataSet = new vis.DataSet();
 
 // --- THEME HANDLING ---
 function updateThemeUI(theme) {
-    if (!document.body) return; // Safety check
+    if (!document.body) return; 
 
     const isLight = theme === 'light';
     document.body.setAttribute('data-theme', theme);
@@ -15,6 +15,17 @@ function updateThemeUI(theme) {
     if(icon && text) {
         icon.textContent = isLight ? '🌙' : '☀️';
         text.textContent = isLight ? 'Dark' : 'Light';
+    }
+    
+    // Update graph colors if network exists
+    if (network) {
+        const textColor = isLight ? '#333333' : '#eeeeee';
+        const edgeColor = isLight ? '#95a5a6' : '#666666';
+        
+        network.setOptions({
+            nodes: { font: { color: textColor } },
+            edges: { color: edgeColor }
+        });
     }
 }
 
@@ -99,6 +110,11 @@ function initNetwork(rawTopoParams) {
     // Initialize dataset
     drawTopology(rawTopoParams);
 
+    const currentTheme = localStorage.getItem('theme') || 'light';
+    const isLight = currentTheme === 'light';
+    const textColor = isLight ? '#333333' : '#eeeeee';
+    const edgeColor = isLight ? '#95a5a6' : '#666666';
+
     const data = { nodes: nodesDataSet, edges: edgesDataSet };
     const options = {
         layout: { 
@@ -118,12 +134,12 @@ function initNetwork(rawTopoParams) {
             }
         },
         edges: { 
-            color: "#95a5a6", 
+            color: edgeColor, 
             width: 2,
             smooth: { type: 'continuous' }
         },
         nodes: {
-            font: { size: 14, color: '#333' }
+            font: { size: 14, color: textColor }
         }
     };
     
