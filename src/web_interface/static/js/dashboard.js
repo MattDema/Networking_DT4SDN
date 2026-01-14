@@ -1,16 +1,26 @@
-// Load saved theme preference
-const savedTheme = localStorage.getItem('theme') || 'light';
-document.body.setAttribute('data-theme', savedTheme);
-updateThemeButton(savedTheme);
+// --- THEME HANDLING ---
+function updateThemeUI(theme) {
+    const isLight = theme === 'light';
+    document.body.setAttribute('data-theme', theme);
+    const icon = document.getElementById('theme-icon');
+    const text = document.getElementById('theme-text');
+    if(icon && text) {
+        icon.textContent = isLight ? '🌙' : '☀️';
+        text.textContent = isLight ? 'Dark' : 'Light';
+    }
+}
 
 function toggleTheme() {
-    const body = document.body;
-    const currentTheme = body.getAttribute('data-theme');
+    const currentTheme = document.body.getAttribute('data-theme');
     const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    body.setAttribute('data-theme', newTheme);
-    document.getElementById('theme-icon').textContent = newTheme === 'light' ? '🌙' : '☀️';
-    document.getElementById('theme-text').textContent = newTheme === 'light' ? 'Dark' : 'Light';
+    localStorage.setItem('theme', newTheme);
+    updateThemeUI(newTheme);
 }
+
+// Apply theme immediately on load
+const savedTheme = localStorage.getItem('theme') || 'light';
+updateThemeUI(savedTheme);
+
 
 // --- VIS.JS TOPOLOGY VISUALIZATION ---
 let network = null;
@@ -22,10 +32,16 @@ function drawTopology(rawTopo) {
         console.error("DEBUG: rawTopo is null or undefined");
         return;
     }
-    console.log("DEBUG: Drawing topology with:", rawTopo);
+    console.log("DEBUG: Drawing topology...", rawTopo);
 
     nodesDataSet.clear();
     edgesDataSet.clear();
+    
+    // Check if rawTopo is valid
+    if (!rawTopo || (!rawTopo.switches && !rawTopo.hosts)) {
+        console.warn("DEBUG: No topology data to draw.");
+        return;
+    }
     
     // 1. Add Switches
     if (rawTopo.switches && Array.isArray(rawTopo.switches)) {
@@ -47,7 +63,7 @@ function drawTopology(rawTopo) {
                 id: host, 
                 label: host ? host.toUpperCase() : "Host", 
                 group: 'host', 
-                shape: 'dot', user: 'host',
+                shape: 'dot', 
                 color: '#e74c3c' 
             });
         });
@@ -67,15 +83,16 @@ function drawTopology(rawTopo) {
 }
 
 function initNetwork(rawTopoParams) {
-    console.log("DEBUG: Initializing Network...");
+    console.log("DEBUG: Initializing Network with params:", rawTopoParams);
     
+    // Try to get container
     const container = document.getElementById('mynetwork');
     if (!container) {
-        console.error("DEBUG: Container #mynetwork not found!");
+        console.error("DEBUG: Container #mynetwork not found via ID!");
         return;
     }
 
-    // Initialize dataset FIRST
+    // Initialize dataset
     drawTopology(rawTopoParams);
 
     const data = { nodes: nodesDataSet, edges: edgesDataSet };
@@ -88,8 +105,7 @@ function initNetwork(rawTopoParams) {
             enabled: true,
             stabilization: {
                 enabled: true,
-                iterations: 1000,
-                updateInterval: 25
+                iterations: 500
             },
             barnesHut: { 
                 gravitationalConstant: -3000, 
@@ -100,25 +116,24 @@ function initNetwork(rawTopoParams) {
         edges: { 
             color: "#95a5a6", 
             width: 2,
-            smooth: {
-                type: 'continuous'
-            }
+            smooth: { type: 'continuous' }
         },
         nodes: {
-            font: { size: 14, color: '#333' },
-            borderWidth: 2
+            font: { size: 14, color: '#333' }
         }
     };
     
-    // Create network
-    network = new vis.Network(container, data, options);
-    
-    // Force fit to screen
-    network.once("stabilizationIterationsDone", function() {
-        console.log("DEBUG: Stabilization done, fitting.");
-        network.fit();
-    });
+    try {
+        network = new vis.Network(container, data, options);
+        console.log("DEBUG: Vis.js Network created successfully.");
+    } catch (e) {
+        console.error("DEBUG: Failed to create Vis.js network:", e);
+    }
 }
 
-// Auto Refresh
-setInterval(() => { window.location.reload(); }, 10000);
+
+// Auto Refresh logic
+setInterval(() => { 
+    // Only reload if user isn't interacting (optional, but for now simple reload)
+    window.location.reload(); 
+}, 10000);
