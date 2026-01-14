@@ -273,32 +273,13 @@ td {
 
 tr:hover { background: var(--table-hover); }
 
-/* Stile unificato per sembrare codice (preso dal riferimento + classe .code-cell) */
-code, .code-cell {
-    background: var(--bg-primary);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace; /* Font codice essenziale */
-    color: var(--text-primary); /* Assicura leggibilità */
-    display: inline-block; /* Fix per padding corretto dentro le celle */
-}
-
-/* 1. Stile per i tag <code> veri e propri (se usati altrove) - mantiene il box */
+/* Matched to reference file */
 code {
     background: var(--bg-primary);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-}
-
-/* 2. Stile SPECIFICO per la tabella dei flow (SOLO FONT, NIENTE SFONDO) */
-.code-cell {
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 12px;
-    color: var(--text-primary);
-    /* Rimosso background e display: inline-block che rompevano la tabella */
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace; /* Explicit monospace */
 }
 
 .no-data { 

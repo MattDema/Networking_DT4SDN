@@ -157,3 +157,24 @@ setInterval(() => {
     // Only reload if user isn't interacting (optional, but for now simple reload)
     window.location.reload(); 
 }, 10000);
+
+// Flow Table population (example function)
+// This function is just an example and may not directly work with your data structures
+function populateFlowTable(dpid, flowList) {
+    let html = '';
+    const tableBody = document.getElementById('flowTableBody');
+    if (!tableBody) return;
+
+    flowList.forEach(flow => {
+        html += `
+            <tr>
+                <td>S${dpid}</td>
+                <td><code>${flow.match}</code></td>
+                <td><code>${flow.instructions}</code></td>
+                <td><strong>${flow.packet_count}</strong></td>
+            </tr>
+        `;
+    });
+
+    tableBody.innerHTML = html;
+}

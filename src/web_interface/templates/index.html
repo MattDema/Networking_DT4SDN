@@ -84,9 +84,9 @@
                                 {% for flow in flow_list %}
                                 <tr>
                                     <td>S{{ dpid }}</td>
-                                    <td class="code-cell" style="font-size: 0.75em;">{{ flow.match }}</td>
-                                    <td class="code-cell" style="font-size: 0.75em;">{{ flow.instructions }}</td>
-                                    <td>{{ flow.packet_count }}</td>
+                                    <td><code>{{ flow.match }}</code></td>
+                                    <td><code>{{ flow.instructions }}</code></td>
+                                    <td><strong>{{ flow.packet_count }}</strong></td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
