@@ -23,7 +23,7 @@ class PhysicalTwinController(app_manager.RyuApp):
         
         # We still keep the metadata for the "Type" (e.g. "Linear")
         # But switches and links will be overwritten by live discovery
-        self.topology_metadata = {"type": "Unknown", "switches": [], "links": []}
+        self.topology_metadata = {"type": "Unknown", "switches": [], "links": [], "hosts": []}
 
         wsgi = kwargs['wsgi']
         wsgi.register(TopologyController, {'physical_controller': self})
@@ -34,7 +34,7 @@ class PhysicalTwinController(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        # Install Table-Miss Flow Entry (Send unknown packets to Controller)
+        # Install Table-Miss Flow Entry
         match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
                                           ofproto.OFPCML_NO_BUFFER)]
@@ -57,7 +57,6 @@ class PhysicalTwinController(app_manager.RyuApp):
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
-        # --- Standard L2 Learning Switch Logic ---
         msg = ev.msg
         datapath = msg.datapath
         ofproto = datapath.ofproto
@@ -75,10 +74,8 @@ class PhysicalTwinController(app_manager.RyuApp):
         dpid = datapath.id
 
         self.mac_to_port.setdefault(dpid, {})
-        # Learn the source
         self.mac_to_port[dpid][src] = in_port
 
-        # Decide output port
         if dst in self.mac_to_port[dpid]:
             out_port = self.mac_to_port[dpid][dst]
         else:
@@ -86,7 +83,6 @@ class PhysicalTwinController(app_manager.RyuApp):
 
         actions = [parser.OFPActionOutput(out_port)]
 
-        # Install a flow to avoid Packet-In next time
         if out_port != ofproto.OFPP_FLOOD:
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
             if msg.buffer_id != ofproto.OFP_NO_BUFFER:
@@ -105,28 +101,22 @@ class PhysicalTwinController(app_manager.RyuApp):
 
     # --- Helper methods for REST Controller ---
     def set_topology(self, data):
-        # We only care about the "type" and maybe hosts/names from the static file
-        # The links/switches will be ignored in favor of live discovery
-        self.topology_metadata["type"] = data.get("type", "Unknown")
-        # We can keep hosts from static config as a backup since Ryu takes time to discover hosts
-        if "hosts" in data:
-            self.topology_metadata["static_hosts"] = data["hosts"]
-        self.logger.info(f"Topology type updated: {self.topology_metadata['type']}")
+        self.topology_metadata = data
+        self.logger.info(f"Topology metadata updated via API: {data.get('type')}")
 
     def get_topology(self):
         """
         Return Hybrid Topology:
         - Type: from static JSON
-        - Switches/Links: from Live Ryu Discovery (LLDP)
+        - Switches/Links (S-S): from Live Ryu Discovery (LLDP)
+        - Hosts/Link (H-S): from static JSON (cached)
         """
         
         # 1. Discover Switches Live
-        # get_switch(self) returns list of topology.switches.Switch objects
         ryu_switches = get_switch(self, None)
         live_switches = [f"s{s.dp.id}" for s in ryu_switches]
         
-        # 2. Discover Links Live
-        # get_link(self) returns list of topology.switches.Link objects
+        # 2. Discover Links Live (S-S only)
         ryu_links = get_link(self, None)
         live_links = []
         for l in ryu_links:
@@ -134,32 +124,32 @@ class PhysicalTwinController(app_manager.RyuApp):
             dst = f"s{l.dst.dpid}"
             live_links.append([src, dst])
             
-        # 3. Hosts (Combination)
-        # Ryu discovers hosts only after they send packets
-        # For better UX, we use the static list if available, or empty
-        live_hosts = self.topology_metadata.get("static_hosts", [])
+        # 3. Hosts & Host Links (Static Fallback)
+        final_hosts = self.topology_metadata.get("hosts", [])
+        static_links = self.topology_metadata.get("links", [])
+        static_switches_list = self.topology_metadata.get("switches", [])
         
-        # Note: We need to manually add links from Hosts to Switches if we rely on static host list
-        # Because Ryu get_link() only returns Switch-to-Switch links.
-        # To simplify: we will reuse static links that involve hosts ('h1'), 
-        # but replace switch-switch links with live ones.
+        # Start with live links
+        final_links = list(live_links)
         
-        final_links = []
-        
-        # Add live switch-switch links
-        final_links.extend(live_links)
-        
-        # Add cached host links from the static metadata (since we can't discover them easily instantly)
-        if "links" in self.topology_metadata:
-            for link in self.topology_metadata["links"]:
-                u, v = link[0], link[1]
-                if u.startswith('h') or v.startswith('h'):
-                    final_links.append(link)
+        # Merge Host Links from Static Metadata
+        # Logic: If a link in static metadata involves a node that is NOT a known switch, it's a host link.
+        for link in static_links:
+            u, v = link[0], link[1]
+            
+            # Check if u or v is a host (i.e., not in the static switch list)
+            # The static switch list is reliable for names like "s1", "s2".
+            u_is_switch = (u in static_switches_list)
+            v_is_switch = (v in static_switches_list)
+            
+            # If it's NOT a Switch-to-Switch link, we assume it's a Host link and keep it.
+            if not (u_is_switch and v_is_switch):
+                final_links.append(link)
 
         return {
-            "type": self.topology_metadata["type"],
-            "switches": live_switches,
-            "hosts": live_hosts,
+            "type": self.topology_metadata.get("type", "Unknown"),
+            "switches": live_switches if live_switches else static_switches_list, # Fallback if live detection empty
+            "hosts": final_hosts,
             "links": final_links
         }
 
