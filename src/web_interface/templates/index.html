@@ -158,61 +158,64 @@
 
         // --- VIS.JS TOPOLOGY VISUALIZATION ---
         // Parse data passed from Flask
-        const rawTopo = {{ topo_info | tojson }};
-        
-        const nodesArray = [];
-        const edgesArray = [];
-        
-        // 1. Add Switches
-        if (rawTopo.switches) {
-            rawTopo.switches.forEach(sw => {
-                nodesArray.push({
-                    id: sw, 
-                    label: sw.toUpperCase(), 
-                    group: 'switch',
-                    image: 'https://img.icons8.com/ios-filled/50/000000/switch.png', // Or use generic shape
-                    shape: 'image' 
+        let network = null;
+        let nodesDataSet = new vis.DataSet();
+        let edgesDataSet = new vis.DataSet();
+
+        function drawTopology(rawTopo) {
+            nodesDataSet.clear();
+            edgesDataSet.clear();
+            
+            // 1. Add Switches
+            if (rawTopo.switches) {
+                rawTopo.switches.forEach(sw => {
+                    nodesDataSet.add({
+                        id: sw, 
+                        label: sw.toUpperCase(), 
+                        group: 'switch',
+                        image: 'https://img.icons8.com/ios-filled/50/000000/switch.png', 
+                        shape: 'image' 
+                    });
                 });
-            });
-        }
-
-        // 2. Add Hosts
-        if (rawTopo.hosts) {
-            rawTopo.hosts.forEach(host => {
-                nodesArray.push({
-                    id: host, 
-                    label: host.toUpperCase(), 
-                    group: 'host', 
-                    shape: 'dot', 
-                    color: '#e74c3c'
-                });
-            });
-        }
-
-        // 3. Add Links
-        if (rawTopo.links) {
-            rawTopo.links.forEach(link => {
-                // Link is typically [node1, node2, opts] or just [node1, node2]
-                let fromNode = link[0];
-                let toNode = link[1];
-                edgesArray.push({ from: fromNode, to: toNode });
-            });
-        }
-
-        // Logic to draw simpler shapes if icons fail or for Dark Mode
-        nodesArray.forEach(node => {
-            if(node.group === 'switch') {
-               node.shape = 'box';
-               node.color = '#3498db';
-               node.font = { color: 'white' };
             }
-        });
+
+            // 2. Add Hosts
+            if (rawTopo.hosts) {
+                rawTopo.hosts.forEach(host => {
+                    nodesDataSet.add({
+                        id: host, 
+                        label: host.toUpperCase(), 
+                        group: 'host', 
+                        shape: 'dot', 
+                        color: '#e74c3c'
+                    });
+                });
+            }
+
+            // 3. Add Links
+            if (rawTopo.links) {
+                rawTopo.links.forEach(link => {
+                    let fromNode = link[0];
+                    let toNode = link[1];
+                    // IMPORTANT: Unique ID for edge to help updates
+                    let edgeId = fromNode + "-" + toNode; 
+                    edgesDataSet.add({ id: edgeId, from: fromNode, to: toNode });
+                });
+            }
+            
+            // Handle Port Status (Naive implementation)
+            // If rawTopo.port_status exists, we could highlight problematic switches
+            if (rawTopo.port_status) {
+                 // Logic to turn switch red if it has down ports?
+            }
+        }
+
+        // Initial Draw
+        const rawTopoParams = {{ topo_info | tojson }};
+        drawTopology(rawTopoParams);
 
         const container = document.getElementById('mynetwork');
-        const data = {
-            nodes: new vis.DataSet(nodesArray),
-            edges: new vis.DataSet(edgesArray)
-        };
+        const data = { nodes: nodesDataSet, edges: edgesDataSet };
         const options = {
             layout: {
                 hierarchical: false,
@@ -233,8 +236,16 @@
         };
         
         if (container) {
-            new vis.Network(container, data, options);
+            network = new vis.Network(container, data, options);
         }
+        
+        // --- AUTO REFRESH LOGIC ---
+        // Reload page every 10 seconds to fetch new state (brute force but effective)
+        // Or better: use fetch() to just update data without refresh
+        setInterval(() => {
+            window.location.reload(); 
+        }, 10000); 
+
     </script>
 </body>
 </html>

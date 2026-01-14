@@ -1,7 +1,7 @@
 # physical_controller.py
 from ryu.base import app_manager
 from ryu.controller import ofp_event
-from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
+from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, DEAD_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet, ethernet, ether_types
@@ -20,6 +20,9 @@ class PhysicalTwinController(app_manager.RyuApp):
         
         # Store topology metadata (received from Mininet script)
         self.topology_metadata = {"type": "Unknown", "switches": [], "links": []}
+        
+        # Live tracking of link status (dpid -> port_no -> is_live)
+        self.port_status = {} 
 
         # Initialize WSGI for REST API
         wsgi = kwargs['wsgi']
@@ -99,6 +102,29 @@ class PhysicalTwinController(app_manager.RyuApp):
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
+
+    @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)
+    def port_status_handler(self, ev):
+        """Handle link up/down events"""
+        msg = ev.msg
+        dp = msg.datapath
+        ofp = dp.ofproto
+        port = msg.desc
+        
+        dpid = dp.id
+        port_no = port.port_no
+        
+        # Check if port is down (LINK_DOWN bit set)
+        is_down = (port.state & ofp.OFPPS_LINK_DOWN)
+        status = "DOWN" if is_down else "UP"
+        
+        self.logger.info(f"EVENT: Switch s{dpid} Port {port_no} is {status}")
+        
+        if dpid not in self.port_status:
+            self.port_status[dpid] = {}
+        
+        self.port_status[dpid][port_no] = (not is_down)
+
     
     # --- Helper methods for REST Controller ---
     def set_topology(self, data):
@@ -106,7 +132,37 @@ class PhysicalTwinController(app_manager.RyuApp):
         self.logger.info(f"Topology metadata updated via API: {data.get('type')}")
 
     def get_topology(self):
-        return self.topology_metadata
+        """Return topology mixed with live status"""
+        live_topo = self.topology_metadata.copy()
+        
+        # Create a new list for links to inject status
+        updated_links = []
+        
+        # Original format from Mininet: [["s1", "s2", {}], ["s2", "s3", {}]] or similar
+        # We need to map node names to dpid to check status
+        # Note: This is an approximation. Mininet script sends names "s1", "s2".
+        # We assume sX corresponds to dpid X.
+        
+        if 'links' in live_topo:
+            for link in live_topo['links']:
+                # link is usually [node1, node2, opts]
+                node1, node2 = link[0], link[1]
+                
+                status = "UP"
+                
+                # Check if this link is affected by any DOWN port
+                # We simply check if either side of the link has a down port? 
+                # Ideally, we need to know WHICH port connects s1 to s2.
+                # Since we don't have the full graph here, we will just mark the link
+                # if we detect a port down event recently?
+                
+                # BETTER APPROACH FOR VISUALIZATION:
+                # We return the raw 'port_status' to the Dashboard.
+                # Let the Dashboard figure out which link is down visually.
+                updated_links.append(link)
+        
+        live_topo['port_status'] = self.port_status
+        return live_topo
 
 
 class TopologyController(ControllerBase):
