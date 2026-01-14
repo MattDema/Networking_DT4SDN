@@ -4,6 +4,34 @@
     <title>Digital Twin Orchestrator</title>
     <!-- Link to external CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Vis.js for Network Topology -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        #mynetwork {
+            width: 100%;
+            height: 350px;
+            border: 1px solid var(--border-color);
+            background-color: var(--card-bg);
+            border-radius: 8px;
+        }
+        .prediction-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .pred-card {
+            background: var(--bg-color);
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #ccc;
+            font-size: 0.85em;
+        }
+        .pred-card.low { border-left-color: #2ecc71; }
+        .pred-card.medium { border-left-color: #f1c40f; }
+        .pred-card.high { border-left-color: #e74c3c; }
+    </style>
 </head>
 <body data-theme="light">
     <div class="header">
@@ -21,160 +49,192 @@
     </div>
 
     <div class="main-layout">
-        <!-- Left Column: Database (1/3) -->
+        <!-- Left Column: Database & Stats -->
         <div class="sidebar">
-            <div class="card" style="height: 100%;">
+            <div class="card">
                 <h3>🗄️ Database Storage</h3>
                 <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 12px;">
-                    SQLite storage for historical data and real-time monitoring.
+                    SQLite storage for historical data.
                 </p>
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
-                    <thead>
-                        <tr>
-                            <th style="padding: 8px;">Table</th>
-                            <th style="padding: 8px;">Entries</th>
-                        </tr>
-                    </thead>
+                <table style="width: 100%; font-size: 0.85em;">
                     <tbody>
-                        <tr>
-                            <td style="padding: 8px;"><code>traffic_stats</code></td>
-                            <td style="padding: 8px;"><strong>{{ db_stats.traffic_stats }}</strong></td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px;"><code>flow_stats</code></td>
-                            <td style="padding: 8px;"><strong>{{ db_stats.flow_stats }}</strong></td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px;"><code>hosts</code></td>
-                            <td style="padding: 8px;"><strong>{{ db_stats.hosts }}</strong></td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px;"><code>predictions</code></td>
-                            <td style="padding: 8px;"><strong>{{ db_stats.predictions }}</strong></td>
-                        </tr>
+                        <tr><td><code>traffic_stats</code></td><td><strong>{{ db_stats.traffic_stats }}</strong></td></tr>
+                        <tr><td><code>flow_stats</code></td><td><strong>{{ db_stats.flow_stats }}</strong></td></tr>
+                        <tr><td><code>hosts</code></td><td><strong>{{ db_stats.hosts }}</strong></td></tr>
                     </tbody>
                 </table>
-                <div style="margin-top: 20px; font-size: 0.8em; color: var(--text-secondary); line-height: 1.4;">
-                    <p>• <b>Traffic:</b> Port metrics used for ML training.</p>
-                    <p>• <b>Flows:</b> Snapshots of active OpenFlow rules.</p>
-                    <p>• <b>Hosts:</b> Inventory of discovered devices.</p>
-                    <p>• <b>Predictions:</b> ML-generated traffic forecasts.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Column: Connection, Switches, Forecast (2/3) -->
-        <div class="main-content">
-            <div class="top-row">
-                <!-- Connection Status -->
-                <div class="card">
-                    <h3>📡 Connection</h3>
-                    <p style="margin: 5px 0; font-size: 0.9em;">PT: <strong>{{ pt_ip }}</strong></p>
-                    <p style="margin: 5px 0; font-size: 0.9em;">Status: <span class="status-{{ 'connected' if connection_status == 'Connected' else 'disconnected' }}">
-                        {{ connection_status }}
-                    </span></p>
-                    <!-- NEW: Topology Type Display -->
-                     <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 8px 0;">
-                    <p style="margin: 5px 0; font-size: 0.9em;">Topo: <strong>{{ topo_info.type | title }}</strong></p>
-                </div>
-
-                <!-- Switch Count -->
-                <div class="card">
-                    <h3>🔀 Switches</h3>
-                    <div style="display: flex; align-items: baseline; gap: 10px;">
-                        <div class="stat-value" style="font-size: 28px;">{{ switches|length }}</div>
-                        <div class="stat-label">Active Nodes</div>
-                    </div>
-                </div>
             </div>
 
-            <!-- AI Prediction -->
-            <div class="card" style="flex-grow: 1;">
-                <h3>🔮 AI Link Forecast (Next 30s)</h3>
-                {% if predictions %}
-                    <div class="traffic-grid">
-                        {% for key, data in predictions.items() %}
-                        <div class="traffic-card traffic-{{ data.level }}">
-                            <div class="traffic-key">{{ key }}</div>
-                            <div class="traffic-value" style="font-size: 1.2em;">{{ data.value }}</div>
-                            <div class="traffic-status">{{ data.status }}</div>
+            <!-- NEW: AI Forecast Section (Context Aware) -->
+            <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+                <h3>🤖 AI Traffic Forecast</h3>
+                <p style="font-size: 0.8em; margin-bottom: 10px;">
+                    Predicted load for current topology (<b>{{ topo_info.type | title }}</b>).
+                </p>
+                <div class="prediction-grid">
+                    {% if predictions %}
+                        {% for key, pred in predictions.items() %}
+                        <div class="pred-card {{ pred.level }}">
+                            <div style="font-weight: bold;">{{ key }}</div>
+                            <div style="font-size: 1.2em;">{{ pred.value }}</div>
+                            <div style="color: var(--text-secondary);">{{ pred.status }}</div>
                         </div>
                         {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="stat-label" style="padding: 20px; text-align: center;">Waiting for traffic data to generate forecasts...</div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Full Width Sections -->
-    <div class="grid">
-        <!-- Network Topology -->
-        <div class="card full-width">
-            <h3>🖧 Network Topology</h3>
-            <div class="device-list">
-                <div class="device-section">
-                    <h4>Switches <span class="count-badge">{{ switches|length }}</span></h4>
-                    {% if switches %}
-                        {% for sw in switches %}
-                            <span class="device-item switch">s{{ sw }}</span>
-                        {% endfor %}
                     {% else %}
-                        <span class="no-data">No switches detected</span>
-                    {% endif %}
-                </div>
-                
-                <div class="device-section">
-                    <h4>Hosts <span class="count-badge">{{ hosts|length }}</span></h4>
-                    {% if hosts %}
-                        {% for host in hosts %}
-                            <span class="device-item host">{{ host.mac }} → s{{ host.dpid }}:p{{ host.port }}</span>
-                        {% endfor %}
-                    {% else %}
-                        <span class="no-data">Generate traffic (ping) to discover hosts</span>
+                        <p style="font-size: 0.9em; color: var(--text-secondary);">No traffic predictions available yet.</p>
                     {% endif %}
                 </div>
             </div>
         </div>
 
-        <!-- Flow Table -->
-        <div class="card full-width">
-            <h3>📊 Live Flow Statistics</h3>
-            {% if flows %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Switch</th>
-                            <th>Priority</th>
-                            <th>Match Rules</th>
-                            <th>Packets</th>
-                            <th>Bytes</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for dpid, flow_list in flows.items() %}
-                            {% for flow in flow_list %}
+        <!-- Right Column: Visualization & Status -->
+        <div class="main-content">
+            <div class="top-row">
+                <div class="card">
+                    <h3>📡 Status</h3>
+                    <p style="margin: 5px 0; font-size: 0.9em;">PT IP: <strong>{{ pt_ip }}</strong></p>
+                    <p style="margin: 5px 0; font-size: 0.9em;">Topo: <strong>{{ topo_info.type | title }}</strong></p>
+                    <p style="margin: 5px 0; font-size: 0.9em;">
+                        Status: <span class="status-{{ 'connected' if connection_status == 'Connected' else 'disconnected' }}">{{ connection_status }}</span>
+                    </p>
+                </div>
+                <!-- Controls placeholder -->
+                <div class="card" style="flex-grow: 2;">
+                    <h3>⚡ Quick Actions</h3>
+                    <button class="btn" onclick="location.reload()">Refresh Data</button>
+                </div>
+            </div>
+
+            <!-- NEW: Topology Graph -->
+            <div class="card">
+                <h3>🗺️ Network Topology (Live)</h3>
+                <div id="mynetwork"></div>
+            </div>
+
+            <!-- Flows Table -->
+            <div class="card">
+                <h3>🌊 Active Flows</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
                             <tr>
-                                <td>s{{ dpid }}</td>
-                                <td>{{ flow.priority }}</td>
-                                <td><code>{{ flow.match }}</code></td>
-                                <td><strong>{{ flow.packet_count }}</strong></td>
-                                <td>{{ flow.byte_count }}</td>
-                                <td><code>{{ flow.actions }}</code></td>
+                                <th>Switch</th>
+                                <th>Priority</th>
+                                <th>Match</th>
+                                <th>Action</th>
+                                <th>Packets</th>
                             </tr>
+                        </thead>
+                        <tbody>
+                            {% for dpid, flow_list in flows.items() %}
+                                {% for flow in flow_list %}
+                                <tr>
+                                    <td>S{{ dpid }}</td>
+                                    <td>{{ flow.priority }}</td>
+                                    <td class="code-cell">{{ flow.match }}</td>
+                                    <td class="code-cell">{{ flow.instructions }}</td>
+                                    <td>{{ flow.packet_count }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="5" style="text-align:center;">No flows detected</td></tr>
                             {% endfor %}
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <p class="no-data">No flow data available yet. Generate traffic in Mininet (ping/iperf).</p>
-            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Link to external JS -->
-    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script>
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            body.setAttribute('data-theme', newTheme);
+            document.getElementById('theme-icon').textContent = newTheme === 'light' ? '🌙' : '☀️';
+            document.getElementById('theme-text').textContent = newTheme === 'light' ? 'Dark' : 'Light';
+        }
+
+        // --- VIS.JS TOPOLOGY VISUALIZATION ---
+        // Parse data passed from Flask
+        const rawTopo = {{ topo_info | tojson }};
+        
+        const nodesArray = [];
+        const edgesArray = [];
+        
+        // 1. Add Switches
+        if (rawTopo.switches) {
+            rawTopo.switches.forEach(sw => {
+                nodesArray.push({
+                    id: sw, 
+                    label: sw.toUpperCase(), 
+                    group: 'switch',
+                    image: 'https://img.icons8.com/ios-filled/50/000000/switch.png', // Or use generic shape
+                    shape: 'image' 
+                });
+            });
+        }
+
+        // 2. Add Hosts
+        if (rawTopo.hosts) {
+            rawTopo.hosts.forEach(host => {
+                nodesArray.push({
+                    id: host, 
+                    label: host.toUpperCase(), 
+                    group: 'host', 
+                    shape: 'dot', 
+                    color: '#e74c3c'
+                });
+            });
+        }
+
+        // 3. Add Links
+        if (rawTopo.links) {
+            rawTopo.links.forEach(link => {
+                // Link is typically [node1, node2, opts] or just [node1, node2]
+                let fromNode = link[0];
+                let toNode = link[1];
+                edgesArray.push({ from: fromNode, to: toNode });
+            });
+        }
+
+        // Logic to draw simpler shapes if icons fail or for Dark Mode
+        nodesArray.forEach(node => {
+            if(node.group === 'switch') {
+               node.shape = 'box';
+               node.color = '#3498db';
+               node.font = { color: 'white' };
+            }
+        });
+
+        const container = document.getElementById('mynetwork');
+        const data = {
+            nodes: new vis.DataSet(nodesArray),
+            edges: new vis.DataSet(edgesArray)
+        };
+        const options = {
+            layout: {
+                hierarchical: false,
+                improvedLayout: true
+            },
+            physics: {
+                stabilization: true,
+                barnesHut: {
+                    gravitationalConstant: -2000,
+                    springConstant: 0.04,
+                    springLength: 95
+                }
+            },
+            edges: {
+                color: "#95a5a6",
+                width: 2
+            }
+        };
+        
+        if (container) {
+            new vis.Network(container, data, options);
+        }
+    </script>
 </body>
 </html>

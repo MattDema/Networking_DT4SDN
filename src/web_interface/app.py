@@ -112,6 +112,17 @@ def index():
     flows, status = get_all_flow_stats()
     topo_info = get_topology_info() # <-- Fetches from PT via HTTP
 
+    # Create a set of active DPIDs based on topology info (s1 -> 1, s2 -> 2)
+    # This helps us filter DB trash from old topologies
+    active_dpids_set = set()
+    for s_name in topo_info.get('switches', []):
+        try:
+            # Assumes format "s1", "s2" -> dpid 1, 2
+            dpid_val = int(s_name.replace('s', ''))
+            active_dpids_set.add(dpid_val)
+        except:
+            pass
+
     try:
         db = get_db()
         db_stats_data = db.get_db_stats()
@@ -136,14 +147,14 @@ def index():
             row_data = []
             
             for row in rows:
-                kb_val = row['predicted_bytes'] / 1000.0
-                if kb_val > current_max_kb:
-                    current_max_kb = kb_val
-                row_data.append((row, kb_val))
+                # FILTER: Only process rows for switches in current topology
+                if row['dpid'] in active_dpids_set:
+                    kb_val = row['predicted_bytes'] / 1000.0
+                    if kb_val > current_max_kb:
+                        current_max_kb = kb_val
+                    row_data.append((row, kb_val))
             
-            # Set a baseline threshold to avoid "Red" alerts for tiny background noise
-            # If the highest traffic is < 50KB, we consider the network "Idle" (Green)
-            # Otherwise, we scale based on the peak.
+            # Set a baseline threshold
             reference_max = max(current_max_kb, 50.0) 
 
             for row, kb_val in row_data:
@@ -162,12 +173,13 @@ def index():
                     level = 'high'
                     status_text = 'High Load'
                 
-                # Override: If traffic is absolutely very low, force Green
                 if kb_val < 10.0:
                     level = 'low'
                     status_text = 'Idle'
 
                 predictions[key] = {
+                    'dpid': row['dpid'],     # Store dpid separately for grouping
+                    'port': row['port'],
                     'value': f"{kb_val:.1f} KB",
                     'timestamp': row['timestamp'],
                     'level': level,
@@ -186,7 +198,7 @@ def index():
         hosts=hosts,
         flows=flows,
         connection_status=status,
-        topo_info=topo_info,  # <-- Pass to template
+        topo_info=topo_info,
         db_stats=db_stats_data,
         predictions=predictions
     )
