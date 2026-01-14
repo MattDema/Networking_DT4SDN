@@ -170,11 +170,15 @@ function populateFlowTable(dpid, flowList) {
             <tr>
                 <td>S${dpid}</td>
                 <td><code>${flow.match}</code></td>
-                <td><code>${flow.instructions}</code></td>
                 <td><strong>${flow.packet_count}</strong></td>
             </tr>
         `;
     });
+    
+    // If no flows, show a message
+    if (!hasFlows) {
+        html = '<tr><td colspan="3" style="text-align:center; padding: 20px;">No active flows</td></tr>';
+    }
 
     tableBody.innerHTML = html;
 }

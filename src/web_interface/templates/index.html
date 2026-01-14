@@ -77,20 +77,19 @@
                 <div class="table-container">
                     <table>
                         <thead>
-                            <tr><th>SW</th><th>Match</th><th>Action</th><th>Pkts</th></tr>
+                            <tr><th>SW</th><th>Match</th><th>Pkts</th></tr>
                         </thead>
-                        <tbody>
+                        <tbody id="flow-body">
                             {% for dpid, flow_list in flows.items() %}
                                 {% for flow in flow_list %}
                                 <tr>
                                     <td>S{{ dpid }}</td>
                                     <td><code>{{ flow.match }}</code></td>
-                                    <td><code>{{ flow.instructions }}</code></td>
                                     <td><strong>{{ flow.packet_count }}</strong></td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
-                                <tr><td colspan="4" style="text-align:center; padding: 20px;">No active flows</td></tr>
+                                <tr><td colspan="3" style="text-align:center; padding: 20px;">No active flows</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
