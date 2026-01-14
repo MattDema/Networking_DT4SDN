@@ -178,8 +178,9 @@ class StatePredictor:
         probabilities = probs[0].cpu().numpy().tolist()
         state = self.class_names[state_id]
         
-        # Estimate bandwidth from state
-        estimated_bw = self._estimate_bandwidth(state_id)
+        # Estimate bandwidth from state AND recent traffic pattern
+        avg_recent = float(np.mean(historical_data))
+        estimated_bw = self._estimate_bandwidth(state_id, avg_recent)
         
         return {
             'state': state,
@@ -191,26 +192,36 @@ class StatePredictor:
             'prediction_horizon': self.prediction_horizon
         }
     
-    def _estimate_bandwidth(self, state_id: int) -> float:
-        """Estimate bandwidth (bytes/s) from predicted state using thresholds."""
+    def _estimate_bandwidth(self, state_id: int, current_avg: float = 0) -> float:
+        """
+        Estimate future bandwidth based on predicted state AND current traffic.
+        
+        If traffic is low and state is NORMAL, prediction stays low.
+        If state changes, we project toward that state's expected range.
+        """
         
         if not self.thresholds:
-            # No thresholds saved, return arbitrary values
-            defaults = [500000, 1500000, 2500000, 4000000]
-            return defaults[state_id]
+            # No thresholds saved, use current average
+            return current_avg
         
         th_normal = self.thresholds.get('NORMAL', 500000)
         th_elevated = self.thresholds.get('ELEVATED', 1500000)
         th_high = self.thresholds.get('HIGH', 2500000)
         
         if state_id == 0:  # NORMAL
-            return th_normal * 0.5  # Midpoint of 0 to threshold
+            # For NORMAL state, use actual traffic (don't inflate to threshold)
+            # But ensure it's within NORMAL range
+            return min(current_avg, th_normal * 0.8)
         elif state_id == 1:  # ELEVATED
-            return (th_normal + th_elevated) / 2
+            # Blend between current and ELEVATED range
+            target = (th_normal + th_elevated) / 2
+            return max(current_avg, target * 0.7)  # At least 70% of range
         elif state_id == 2:  # HIGH
-            return (th_elevated + th_high) / 2
+            target = (th_elevated + th_high) / 2
+            return max(current_avg, target * 0.7)
         else:  # CRITICAL
-            return th_high * 1.25  # Above highest threshold
+            # CRITICAL means expect high traffic
+            return max(current_avg, th_high)
     
     def get_state_info(self, state: str) -> Dict:
         """Get information about a state including suggested actions."""
