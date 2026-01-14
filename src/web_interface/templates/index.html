@@ -73,6 +73,9 @@
                     <p style="margin: 5px 0; font-size: 0.9em;">Status: <span class="status-{{ 'connected' if connection_status == 'Connected' else 'disconnected' }}">
                         {{ connection_status }}
                     </span></p>
+                    <!-- NEW: Topology Type Display -->
+                     <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 8px 0;">
+                    <p style="margin: 5px 0; font-size: 0.9em;">Topo: <strong>{{ topo_info.type | title }}</strong></p>
                 </div>
 
                 <!-- Switch Count -->

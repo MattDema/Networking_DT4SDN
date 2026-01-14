@@ -81,14 +81,18 @@ def get_all_flow_stats():
 
 
 def get_topology_info():
-    """Fetch the high-level topology type from Ryu."""
+    """Fetch the high-level topology type from Ryu (Physical Twin)."""
+    # Since we are on a different VM, we rely ONLY on the API.
+    # We do NOT look for a local 'current_topology.json' file.
     try:
         url = f"{RYU_API_URL}/topology/metadata"
         resp = requests.get(url, timeout=2)
         if resp.status_code == 200:
             return resp.json()
-    except:
-        pass
+    except Exception as e:
+        # Controller might be down, or network unreachable
+        print(f"Warning: Could not fetch validation topology from {url}: {e}")
+    
     return {"type": "Unknown", "switches": [], "links": []}
 
 
@@ -99,7 +103,7 @@ def index():
     switches = get_active_switches()
     hosts = get_hosts()
     flows, status = get_all_flow_stats()
-    topo_info = get_topology_info() # <-- Fetch topology info
+    topo_info = get_topology_info() # <-- Fetches from PT via HTTP
 
     try:
         db = get_db()
