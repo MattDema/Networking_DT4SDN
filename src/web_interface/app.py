@@ -762,8 +762,9 @@ DASHBOARD_HTML = """
                     actualData.push(null); // No actual data for future
                 }
                 
-                // Build prediction data array with TREND (not flat!)
-                // Calculate recent trend from last 10 actual points
+                // Build prediction data array - HONEST representation
+                // The model predicts a STATE, not exact values
+                // Show a smooth transition from current to predicted state
                 const predData = [];
                 for (let i = 0; i < historyPoints; i++) {
                     predData.push(null);
@@ -772,26 +773,17 @@ DASHBOARD_HTML = """
                 const currentVal = actualHistory[actualHistory.length - 1] || 0;
                 const targetVal = predictedKB;
                 
-                // Calculate trend (slope) from recent history
-                let trend = 0;
-                if (actualHistory.length >= 5) {
-                    const recent = actualHistory.slice(-10);
-                    const start = recent.slice(0, 3).reduce((a,b) => a+b, 0) / 3;
-                    const end = recent.slice(-3).reduce((a,b) => a+b, 0) / 3;
-                    trend = (end - start) / recent.length;
-                }
-                
-                // Project forward with trend, easing toward predicted state
+                // If current is near zero and target is also low (NORMAL), stay flat
+                // Otherwise, show gradual transition to predicted state
                 predData.push(currentVal); // NOW point
+                
                 for (let i = 1; i <= predictionPoints; i++) {
-                    // Blend between trend continuation and target state
-                    const trendValue = currentVal + trend * i;
-                    const blendFactor = Math.min(1, i / 30); // Ease over 30 seconds
-                    const blendedValue = trendValue * (1 - blendFactor) + targetVal * blendFactor;
-                    
-                    // Add some randomness for natural look
-                    const noise = (Math.random() - 0.5) * targetVal * 0.1;
-                    predData.push(Math.max(0, blendedValue + noise));
+                    // Smooth easing from current toward predicted state
+                    const progress = i / predictionPoints;
+                    // Use ease-out curve for smooth transition
+                    const eased = 1 - Math.pow(1 - progress, 2);
+                    const value = currentVal + (targetVal - currentVal) * eased;
+                    predData.push(Math.max(0, value));
                 }
                 
                 // Update chart data
