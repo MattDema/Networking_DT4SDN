@@ -86,7 +86,6 @@ h1 {
     50% { opacity: 0.5; }
 }
 
-/* Theme Toggle Button */
 .theme-toggle {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -115,10 +114,9 @@ h1 {
     margin-bottom: 20px;
 }
 
-/* New Layout Classes */
 .main-layout {
     display: grid;
-    grid-template-columns: 280px 1fr; /* Fixed sidebar, adaptive content */
+    grid-template-columns: 280px 1fr; 
     gap: 20px;
     margin-bottom: 20px;
     align-items: start;
@@ -148,18 +146,17 @@ h1 {
 }
 
 .sidebar-logo {
-    max-width: 180px;
-    max-height: 80px;
+    max-width: 220px;
+    max-height: 100px;
     width: auto;
     height: auto;
     object-fit: contain;
-    /* Optional: make them blend better in dark mode if they have white bg */
     mix-blend-mode: multiply; 
 }
 
 [data-theme="dark"] .sidebar-logo {
     mix-blend-mode: normal;
-    background: white; /* Ensure visibility in dark mode if transparent/black logos */
+    background: white;
     padding: 5px;
     border-radius: 4px;
 }
@@ -171,7 +168,6 @@ h1 {
     min-width: 0;
 }
 
-/* Chart Styles */
 .legend-container {
     display: flex;
     align-items: center;
@@ -190,7 +186,6 @@ h1 {
 .legend-dot.physical { background-color: rgba(54, 162, 235, 1); }
 .legend-dot.digital { background-color: rgba(255, 99, 132, 1); }
 
-/* Make network chart grow */
 #mynetwork {
     width: 100%;
     height: 100%;
@@ -341,13 +336,12 @@ td {
 
 tr:hover { background: var(--table-hover); }
 
-/* Matched to reference file */
 code {
     background: var(--bg-primary);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace; /* Explicit monospace */
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace; 
 }
 
 .no-data { 
@@ -357,7 +351,6 @@ code {
     text-align: center;
 }
 
-/* --- NEW TRAFFIC CARD STYLES --- */
 .traffic-grid {
     display: grid; 
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
@@ -421,7 +414,6 @@ code {
     letter-spacing: 0.5px;
 }
 
-/* Dark mode adjustments for traffic cards */
 [data-theme="dark"] .traffic-low {
     background-color: rgba(40, 167, 69, 0.2);
     color: #75b798;
@@ -435,29 +427,24 @@ code {
     color: #ea868f;
 }
 
-/* --- ADD THESE NEW STYLES --- */
-
-/* Sidebar Layout adjustments */
 .sidebar {
-    flex: 0 0 250px; /* Force sidebar width */
+    flex: 0 0 250px; 
 }
 
-/* Vis.js Network Container - Ensure height is explicit and background visible */
+
 #mynetwork {
     width: 100%;
-    height: 500px; /* Increased height for better visibility */
+    height: 500px;
     border: 1px solid var(--border);
-    background-color: var(--bg-card); /* Use variable instead of hardcoded */
+    background-color: var(--bg-card); 
     border-radius: 8px;
-    display: block; /* Ensure block display */
+    display: block; 
 }
 
-/* AI Forecast - Fix width issues */
 .prediction-grid {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    /* Limit height but don't force it to be huge if empty */
     max-height: 400px; 
     overflow-y: auto;
     padding-right: 5px; 
@@ -475,7 +462,6 @@ code {
     align-items: center;
 }
 
-/* AI Forecast Colors - RESTORED */
 .pred-card.low {
     background-color: rgba(40, 167, 69, 0.15);
     border-left-color: #28a745;
@@ -493,7 +479,6 @@ code {
     animation: pulse-red 2s infinite;
 }
 
-/* Dark Mode Overrides for Pred Cards */
 [data-theme="dark"] .pred-card.low {
     background-color: rgba(40, 167, 69, 0.2);
     color: #75b798;
@@ -507,7 +492,6 @@ code {
     color: #ea868f;
 }
 
-/* --- Model Selector Styles --- */
 .model-selector {
     display: flex;
     align-items: center;
@@ -537,7 +521,6 @@ code {
     font-weight: bold;
 }
 
-/* --- Chart Legend Styles --- */
 .chart-legend {
     display: flex; 
     justify-content: space-between; 
@@ -564,8 +547,8 @@ code {
 
 .legend-line.digital {
     background: #e74c3c;
-    border-bottom: 1px dashed #e74c3c; /* Simulate dashed line */
-    background: transparent; /* Or keep solid if prefer */
+    border-bottom: 1px dashed #e74c3c;
+    background: transparent; 
     border-top: 2px dashed #e74c3c;
 }
 

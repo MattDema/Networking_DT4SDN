@@ -1,10 +1,8 @@
-// --- VIS.JS TOPOLOGY VISUALIZATION ---
-// Initialize these at the top level so they are available to safe scopes
 let network = null;
 let nodesDataSet = new vis.DataSet();
 let edgesDataSet = new vis.DataSet();
 
-// --- THEME HANDLING ---
+//  theme handling
 function updateThemeUI(theme) {
     if (!document.body) return; 
 
@@ -58,7 +56,7 @@ function drawTopology(rawTopo) {
         return;
     }
     
-    // 1. Add Switches
+    // Add Switches
     if (rawTopo.switches && Array.isArray(rawTopo.switches)) {
         rawTopo.switches.forEach(sw => {
             nodesDataSet.add({
@@ -71,7 +69,7 @@ function drawTopology(rawTopo) {
         });
     }
 
-    // 2. Add Hosts
+    // Add Hosts
     if (rawTopo.hosts && Array.isArray(rawTopo.hosts)) {
         rawTopo.hosts.forEach(host => {
             nodesDataSet.add({ 
@@ -84,7 +82,7 @@ function drawTopology(rawTopo) {
         });
     }
 
-    // 3. Add Links
+    // Add Links
     if (rawTopo.links && Array.isArray(rawTopo.links)) {
         rawTopo.links.forEach(link => {
             if (link.length >= 2) {
@@ -154,12 +152,10 @@ function initNetwork(rawTopoParams) {
 
 // Auto Refresh logic
 setInterval(() => { 
-    // Only reload if user isn't interacting (optional, but for now simple reload)
     window.location.reload(); 
 }, 10000);
 
-// Flow Table population (example function)
-// This function is just an example and may not directly work with your data structures
+// Flow Table population
 function populateFlowTable(dpid, flowList) {
     let html = '';
     const tableBody = document.getElementById('flowTableBody');
@@ -183,7 +179,7 @@ function populateFlowTable(dpid, flowList) {
     tableBody.innerHTML = html;
 }
 
-// ===== MODEL SWITCHING =====
+// model switching
 async function switchModel(scenario) {
     const statusEl = document.getElementById('model-status');
     statusEl.textContent = '⏳';
@@ -225,7 +221,7 @@ async function loadCurrentModel() {
     }
 }
 
-// ===== PREDICTION CHART =====
+// prediction chart
 let predictionChart = null;
 const historyPoints = 60;
 const predictionPoints = 60;

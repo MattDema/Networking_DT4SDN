@@ -3,7 +3,6 @@
 <head>
     <title>Digital Twin Orchestrator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <!-- LIVE LIBRARY MUST LOAD FIRST -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script> 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -17,7 +16,6 @@
         <div class="header-controls">
             <div class="live-indicator"><span class="live-dot"></span><span>LIVE</span></div>
             
-            <!-- NUOVO: Model Selector -->
             <div class="model-selector">
                 <label for="scenario-select">Model:</label>
                 <select id="scenario-select" onchange="switchModel(this.value)">
@@ -37,7 +35,6 @@
     </div>
 
     <div class="main-layout">
-        <!-- Sidebar -->
         <div class="sidebar">
             <div class="card">
                 <h3>System Status</h3>
@@ -60,25 +57,23 @@
                 </div>
             </div>
 
-            <!-- University Logos -->
             <div class="logos-container">
                 <img src="{{ url_for('static', filename='img/logo_disi.png') }}" alt="DISI" class="sidebar-logo">
             </div>
         </div>
         
-        <!-- Main Content -->
+        <!-- main content area -->
         <div class="main-content">
-            <!-- 1. LIVE TOPOLOGY (Wide) -->
+            <!-- live topology -->
             <div class="card" style="display: flex; flex-direction: column;">
                 <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
                     <h3>Live Topology</h3>
                     <span style="font-size: 0.8em; color: gray;">Drag nodes to rearrange</span>
                 </div>
-                <!-- CSS defines height for #mynetwork -->
                 <div id="mynetwork"></div> 
             </div>
 
-            <!-- 2. PREDICTION CHART (Wide) -->
+            <!-- ai traffic forecast -->
             <div class="card full-width">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <h3>AI Traffic Forecast</h3>
@@ -93,7 +88,7 @@
                 </div>
             </div>
 
-            <!-- 3. PACKET FLOWS -->
+            <!-- packet flows -->
             <div class="card">
                 <h3>🌊 Packet Flows</h3>
                 <div class="table-container">
@@ -120,7 +115,7 @@
         </div>
     </div>
 
-    <!-- INITIALIZATION -->
+    <!-- initialization -->
     <script>
         const rawTopoParams = {{ topo_info | tojson }};
         document.addEventListener('DOMContentLoaded', function() {
