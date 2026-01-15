@@ -18,32 +18,59 @@ if src_dir not in sys.path:
 # Now we can import directly from 'database' (since 'src' is in path)
 from database.db_manager import get_db
 from ml_models.state_predictor import StatePredictor
+from ml_models.seq2seq_predictor import Seq2SeqPredictor
 import numpy as np
 
-# Initialize state predictor (loaded once at startup)
+# Get project root
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+models_dir = os.path.join(project_root, 'models')
+
+# Initialize state predictor (classifier)
 state_predictor = None
 try:
     import glob
-    # Get project root (two levels up from this file: web_interface -> src -> project)
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    models_dir = os.path.join(project_root, 'models')
-    
     model_pattern = os.path.join(models_dir, '*_classifier_3050.pt')
     model_files = glob.glob(model_pattern)
     
-    print(f"Looking for models in: {models_dir}")
-    print(f"Found models: {model_files}")
+    print(f"Looking for classifier models in: {models_dir}")
+    print(f"Found: {model_files}")
     
     if model_files:
-        # Use mixed model as default (trained on all patterns)
         mixed_model = [f for f in model_files if 'mixed' in f]
         model_path = mixed_model[0] if mixed_model else model_files[0]
         state_predictor = StatePredictor(model_path)
         print(f"✓ StatePredictor loaded: {model_path}")
     else:
-        print(f"⚠️ No classifier models found in {models_dir}")
+        print(f"⚠️ No classifier models found")
 except Exception as e:
     print(f"⚠️ Could not load StatePredictor: {e}")
+    import traceback
+    traceback.print_exc()
+
+# Initialize seq2seq predictor (for graph visualization)
+seq2seq_predictor = None
+try:
+    # Try A100 models first, then regular models folder
+    seq2seq_dir = os.path.join(models_dir, 'seq2seqA100')
+    if not os.path.exists(seq2seq_dir):
+        seq2seq_dir = models_dir
+    
+    seq_pattern = os.path.join(seq2seq_dir, '*_seq2seq_3050.pt')
+    seq_files = glob.glob(seq_pattern)
+    
+    print(f"Looking for seq2seq models in: {seq2seq_dir}")
+    print(f"Found: {seq_files}")
+    
+    if seq_files:
+        # Prefer mixed model
+        mixed_seq = [f for f in seq_files if 'mixed' in f]
+        seq_path = mixed_seq[0] if mixed_seq else seq_files[0]
+        seq2seq_predictor = Seq2SeqPredictor(seq_path)
+        print(f"✓ Seq2SeqPredictor loaded: {seq_path}")
+    else:
+        print(f"⚠️ No seq2seq models found")
+except Exception as e:
+    print(f"⚠️ Could not load Seq2SeqPredictor: {e}")
     import traceback
     traceback.print_exc()
 
@@ -762,28 +789,32 @@ DASHBOARD_HTML = """
                     actualData.push(null); // No actual data for future
                 }
                 
-                // Build prediction data array - HONEST representation
-                // The model predicts a STATE, not exact values
-                // Show a smooth transition from current to predicted state
+                // Build prediction data array
+                // Use ACTUAL seq2seq predictions if available!
                 const predData = [];
                 for (let i = 0; i < historyPoints; i++) {
                     predData.push(null);
                 }
                 
                 const currentVal = actualHistory[actualHistory.length - 1] || 0;
-                const targetVal = predictedKB;
-                
-                // If current is near zero and target is also low (NORMAL), stay flat
-                // Otherwise, show gradual transition to predicted state
                 predData.push(currentVal); // NOW point
                 
-                for (let i = 1; i <= predictionPoints; i++) {
-                    // Smooth easing from current toward predicted state
-                    const progress = i / predictionPoints;
-                    // Use ease-out curve for smooth transition
-                    const eased = 1 - Math.pow(1 - progress, 2);
-                    const value = currentVal + (targetVal - currentVal) * eased;
-                    predData.push(Math.max(0, value));
+                // Check if we have actual seq2seq predictions
+                if (data.future_values && Array.isArray(data.future_values) && data.future_values.length > 0) {
+                    // Use REAL seq2seq predictions (convert to KB/s)
+                    for (let i = 0; i < Math.min(predictionPoints, data.future_values.length); i++) {
+                        predData.push(data.future_values[i] / 1000);
+                    }
+                    console.log('Using seq2seq predictions');
+                } else {
+                    // Fallback: smooth transition to estimated bandwidth
+                    const targetVal = predictedKB;
+                    for (let i = 1; i <= predictionPoints; i++) {
+                        const progress = i / predictionPoints;
+                        const eased = 1 - Math.pow(1 - progress, 2);
+                        const value = currentVal + (targetVal - currentVal) * eased;
+                        predData.push(Math.max(0, value));
+                    }
                 }
                 
                 // Update chart data
@@ -1062,22 +1093,34 @@ def api_prediction():
                   f"Est BW: {result['estimated_bandwidth']:,.0f} B/s")
             
             result['current_traffic'] = current_traffic
-            result['avg_traffic'] = avg_traffic  # Add avg for display
+            result['avg_traffic'] = avg_traffic
             result['timestamp'] = time.time()
             result['model_used'] = True
+            
+            # Use seq2seq for actual future values (for graph visualization)
+            if seq2seq_predictor:
+                try:
+                    future_values = seq2seq_predictor.predict(historical_data)
+                    result['future_values'] = future_values.tolist()
+                    print(f"[SEQ2SEQ] Generated {len(future_values)} future values")
+                except Exception as e:
+                    print(f"[SEQ2SEQ] Error: {e}")
+                    result['future_values'] = None
+            else:
+                result['future_values'] = None
+            
             return jsonify(result)
         else:
             reason = "no predictor" if not state_predictor else f"only {len(bytes_per_second)} samples"
             print(f"[FALLBACK] Using threshold-based: {reason}")
             # Fallback: simple threshold-based estimation
-            # These thresholds are for bytes/second
-            if avg_traffic < 100000:  # < 100 KB/s
+            if avg_traffic < 100000:
                 state, color = 'NORMAL', '#27ae60'
-            elif avg_traffic < 500000:  # < 500 KB/s
+            elif avg_traffic < 500000:
                 state, color = 'ELEVATED', '#f39c12'
-            elif avg_traffic < 1000000:  # < 1 MB/s
+            elif avg_traffic < 1000000:
                 state, color = 'HIGH', '#e67e22'
-            else:  # > 1 MB/s
+            else:
                 state, color = 'CRITICAL', '#e74c3c'
             
             return jsonify({
@@ -1089,7 +1132,8 @@ def api_prediction():
                 'color': color,
                 'prediction_horizon': 60,
                 'timestamp': time.time(),
-                'model_loaded': state_predictor is not None
+                'model_loaded': state_predictor is not None,
+                'future_values': None
             })
             
     except Exception as e:
