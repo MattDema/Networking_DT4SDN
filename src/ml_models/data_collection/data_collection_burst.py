@@ -12,16 +12,16 @@ import os
 import random
 import signal
 
-# --- Configurazione ---
+# --- Configuration ---
 OUTPUT_FILE = "network_data_burst.csv"
 MONITORED_INTERFACE = "s1-eth2" 
-SIMULATION_TIME = 50000  # 30 minuti
-LINK_BW = 30            # Capacità 10 Mbps
+SIMULATION_TIME = 50000  # 30 min
+LINK_BW = 30            # Capacity 30 Mbps
 
 class CustomTopo(Topo):
     def build(self):
         host_config = dict(inNamespace=True)
-        # Link identico agli altri scenari
+        # Link identical to other scenarios
         link_config = dict(bw=LINK_BW, delay='5ms', loss=0, max_queue_size=100)
         
         self.addSwitch("s1", dpid="%016x" % 1)
@@ -46,7 +46,7 @@ def get_rx_bytes(interface):
         return 0
 
 def monitor_traffic(stop_event):
-    info(f"*** Avvio monitoraggio BURST su {MONITORED_INTERFACE}...\n")
+    info(f"*** Starting BURST monitoring on {MONITORED_INTERFACE}...\n")
     
     with open(OUTPUT_FILE, "w") as f:
         f.write("timestamp,bytes\n")
@@ -73,47 +73,47 @@ def traffic_generator(net):
     h2 = net.get('h2')
     h3 = net.get('h3') # Vittima
 
-    info("*** Avvio Server Iperf su h3...\n")
+    info("*** Starting Iperf Server on h3...\n")
     h3.cmd('iperf -s -u &') 
     
-    info("*** Inizio scenario BURST (Quiet -> Spike -> Quiet)...\n")
+    info("*** Starting BURST scenario (Quiet -> Spike -> Quiet)...\n")
     
     start_time = time.time()
     
     while (time.time() - start_time) < SIMULATION_TIME:
         elapsed = time.time() - start_time
         
-        # --- FASE 1: CALMA (Background Noise) ---
-        # Intervallo variabile tra i burst (da 10 a 40 secondi)
-        # Il traffico qui è basso, sotto i 2 Mbps.
+        # --- PHASE 1: CALM (Background Noise) ---
+        # Variable interval between bursts (from 10 to 40 seconds)
+        # Traffic here is low, under 2 Mbps.
         quiet_duration = random.randint(10, 40)
         
         info(f"[{int(elapsed)}s] Status: Quiet (Next burst in {quiet_duration}s)\n")
         
-        # Usiamo un ciclo while per coprire la durata della quiete inviando pacchetti leggeri
+        # We use a while loop to cover the quiet duration by sending light packets
         end_quiet = time.time() + quiet_duration
         while time.time() < end_quiet:
-            # Piccolo traffico di heartbeat (0.5M - 1.5M)
+            # Small heartbeat traffic (0.5M - 1.5M)
             h1.cmd('iperf -c 10.0.0.3 -u -b 1M -t 2')
-            time.sleep(2.1) # Attesa che finisca iperf
+            time.sleep(2.1) # Wait for iperf to finish
 
-        # --- FASE 2: BURST (Spike Violento) ---
-        # Durata breve (1 - 5 secondi)
-        # Intensità MOLTO alta (somma h1 + h2 >> 10Mbps)
+        # --- PHASE 2: BURST (Violent Spike) ---
+        # Short duration (1 - 5 seconds)
+        # VERY high intensity (sum h1 + h2 >> 10Mbps)
         burst_duration = random.uniform(1.0, 5.0)
         
         info(f"[{int(time.time()-start_time)}s] !!! BURST EVENT !!! ({burst_duration:.1f}s)\n")
         
-        # H1 manda 15M (già satura da solo)
+        # H1 sends 15M (already saturates alone)
         h1.cmd(f'iperf -c 10.0.0.3 -u -b 15M -t {burst_duration} &')
-        # H2 manda 15M (colpo di grazia al buffer)
+        # H2 sends 15M (finishing blow to the buffer)
         h2.cmd(f'iperf -c 10.0.0.3 -u -b 15M -t {burst_duration} &')
         
-        # Aspettiamo che il burst finisca + 1 secondo di "recovery"
+        # We wait for the burst to finish + 1 second of "recovery"
         time.sleep(burst_duration + 1)
 
 def stop_all_iperf(net):
-    info("*** Pulizia processi...\n")
+    info("*** Cleaning processes...\n")
     for host in net.hosts:
         host.cmd('killall -9 iperf')
 
@@ -129,13 +129,13 @@ def run():
     try:
         traffic_generator(net)
     except KeyboardInterrupt:
-        info("*** Interruzione manuale...\n")
+        info("*** Manual interruption...\n")
     finally:
         stop_monitor.set()
         monitor_thread.join()
         stop_all_iperf(net)
         net.stop()
-        info(f"*** Dati salvati in {OUTPUT_FILE}\n")
+        info(f"*** Data saved in {OUTPUT_FILE}\n")
 
 if __name__ == '__main__':
     setLogLevel('info')

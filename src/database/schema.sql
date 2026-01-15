@@ -1,6 +1,3 @@
--- Schema for Digital Twin traffic data storage
-
--- Traffic statistics collected from switches
 CREATE TABLE IF NOT EXISTS traffic_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -34,13 +31,13 @@ CREATE TABLE IF NOT EXISTS hosts (
     last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- ML Predictions (Fixed)
+-- ML Predictions
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     dpid INTEGER NOT NULL,
-    port_no INTEGER NOT NULL,           -- <--- ADDED THIS
-    predicted_bytes REAL,               -- Changed to REAL for ML precision
+    port_no INTEGER NOT NULL,           
+    predicted_bytes REAL,               
     actual_bytes REAL,
     prediction_horizon INTEGER DEFAULT 5
 );
