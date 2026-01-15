@@ -132,14 +132,14 @@ def index():
         with db._get_connection() as conn:
             # Get the latest prediction for each dpid/port pair
             rows = conn.execute('''
-                SELECT dpid, port, predicted_bytes, timestamp 
+                SELECT dpid, port_no, predicted_bytes, timestamp 
                 FROM predictions p1
                 WHERE id = (
                     SELECT MAX(id) 
                     FROM predictions p2 
-                    WHERE p2.dpid = p1.dpid AND p2.port = p1.port
+                    WHERE p2.dpid = p1.dpid AND p2.port_no = p1.port_no
                 )
-                ORDER BY dpid, port
+                ORDER BY dpid, port_no
             ''').fetchall()
             
             # 1. Calculate Dynamic Max (Peak traffic in this snapshot)
@@ -159,7 +159,7 @@ def index():
 
             for row, kb_val in row_data:
                 # CHANGED FROM :p TO :eth
-                key = f"s{row['dpid']}:eth{row['port']}"
+                key = f"s{row['dpid']}:eth{row['port_no']}"
                 
                 # Calculate ratio against the current peak
                 ratio = kb_val / reference_max
