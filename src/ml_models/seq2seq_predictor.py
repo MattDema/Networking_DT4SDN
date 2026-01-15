@@ -3,7 +3,7 @@
 Seq2Seq Traffic Predictor for Graph Visualization
 
 Loads trained seq2seq models and predicts 60 future traffic values.
-Used alongside the state classifier for realistic graph predictions.
+Supports both A100-trained models (CNN+LSTM) and laptop models (FastSeq2Seq).
 """
 
 import torch
@@ -14,8 +14,64 @@ import os
 import joblib
 
 
+# Architecture used by A100 training (CNN + BiLSTM)
+class A100Seq2Seq(nn.Module):
+    """CNN + BiLSTM Seq2Seq (matches A100 training architecture)"""
+    
+    def __init__(self, config):
+        super().__init__()
+        hidden = config.get('hidden_size', 256)
+        layers = config.get('num_layers', 2)
+        dropout = config.get('dropout', 0.3)
+        pred_horizon = config.get('prediction_horizon', 60)
+        
+        # CNN feature extractor
+        self.conv = nn.Sequential(
+            nn.Conv1d(1, 64, kernel_size=5, padding=2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Conv1d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU()
+        )
+        
+        # BiLSTM
+        self.lstm = nn.LSTM(
+            input_size=128,
+            hidden_size=hidden,
+            num_layers=layers,
+            batch_first=True,
+            dropout=dropout if layers > 1 else 0,
+            bidirectional=True
+        )
+        
+        # Output projection
+        self.fc = nn.Sequential(
+            nn.Linear(hidden * 2, hidden),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden, pred_horizon)
+        )
+        
+        self.prediction_horizon = pred_horizon
+    
+    def forward(self, x):
+        # x: (batch, seq_len, 1)
+        x = x.permute(0, 2, 1)  # (batch, 1, seq_len)
+        x = self.conv(x)  # (batch, 128, seq_len)
+        x = x.permute(0, 2, 1)  # (batch, seq_len, 128)
+        
+        lstm_out, _ = self.lstm(x)  # (batch, seq_len, hidden*2)
+        
+        # Use last output
+        last_out = lstm_out[:, -1, :]  # (batch, hidden*2)
+        output = self.fc(last_out)  # (batch, pred_horizon)
+        
+        return output
+
+
+# Architecture used by laptop training (FastSeq2Seq)
 class FastSeq2Seq(nn.Module):
-    """Fast LSTM Encoder-Decoder (matches training architecture)"""
+    """Fast LSTM Encoder-Decoder (laptop training architecture)"""
     
     def __init__(self, config):
         super().__init__()
@@ -75,11 +131,7 @@ class FastSeq2Seq(nn.Module):
 class Seq2SeqPredictor:
     """
     Seq2Seq Traffic Predictor for Graph Visualization.
-    
-    Usage:
-        predictor = Seq2SeqPredictor('models/seq2seqA100/mixed_seq2seq_3050.pt')
-        future_values = predictor.predict(traffic_history)
-        # Returns: array of 60 predicted traffic values (bytes/s)
+    Auto-detects model architecture (A100 or laptop).
     """
     
     def __init__(self, model_path: str, scaler_path: Optional[str] = None):
@@ -92,13 +144,25 @@ class Seq2SeqPredictor:
         # Load checkpoint
         checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         config = checkpoint['config']
+        state_dict = checkpoint['model_state_dict']
         
         self.sequence_length = config.get('sequence_length', 90)
         self.prediction_horizon = config.get('prediction_horizon', 60)
         
-        # Build model
-        self.model = FastSeq2Seq(config).to(self.device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        # Auto-detect architecture from state_dict keys
+        has_conv = any('conv' in k for k in state_dict.keys())
+        has_encoder = any('encoder' in k for k in state_dict.keys())
+        
+        if has_conv:
+            print("  Detected A100 architecture (CNN+LSTM)")
+            self.model = A100Seq2Seq(config).to(self.device)
+        elif has_encoder:
+            print("  Detected FastSeq2Seq architecture")
+            self.model = FastSeq2Seq(config).to(self.device)
+        else:
+            raise ValueError("Unknown model architecture")
+        
+        self.model.load_state_dict(state_dict)
         self.model.eval()
         
         print(f"✓ Seq2Seq loaded: {model_path}")
@@ -148,9 +212,15 @@ class Seq2SeqPredictor:
         with torch.no_grad():
             output = self.model(x)
         
-        # Inverse transform
-        predictions = output[0].cpu().numpy().reshape(-1, 1)
+        # Get predictions
+        if output.dim() == 2:
+            predictions = output[0].cpu().numpy()
+        else:
+            predictions = output.cpu().numpy()
         
+        predictions = predictions.reshape(-1, 1)
+        
+        # Inverse transform
         if self.scaler is not None:
             predictions = self.scaler.inverse_transform(predictions)
         
