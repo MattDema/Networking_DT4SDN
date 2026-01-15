@@ -6,7 +6,7 @@ import json
 import time
 import numpy as np
 from flask import Flask, render_template, jsonify, request
-from collections import defaultdict # Added for traffic calculation
+from collections import defaultdict 
 
 app = Flask(__name__)
 
@@ -243,7 +243,7 @@ def switch_model_scenario():
     # 2. Switch Seq2Seq Model
     s2s_result = False
     if seq2seq_manager:
-        s2s_result = seq2seq_manager.switch_model(scenario) # Using correct method name switch_model
+        s2s_result = seq2seq_manager.switch_model(scenario) 
 
     return jsonify({
         'status': 'success', 
@@ -253,10 +253,11 @@ def switch_model_scenario():
     })
 
 # --- DATA PREPARATION HELPER ---
-def get_traffic_data_for_plot(minutes=2):
+def get_traffic_data_for_plot(minutes=2, target_dpid=None, target_port=None):
     """
-    Fetches raw traffic history, calculates aggregated per-second speed 
-    across all ports to represent 'Network Load'.
+    Fetches raw traffic history. 
+    If target_dpid/port are set, returns traffic ONLY for that link.
+    Otherwise, returns aggregate network load.
     """
     db = get_db()
     traffic_history = db.get_traffic_history(minutes=minutes)
@@ -264,17 +265,27 @@ def get_traffic_data_for_plot(minutes=2):
     if not traffic_history or len(traffic_history) < 2:
         return [], 0, 0
 
-    # Group by (dpid, port) to handle cumulative counters correctly
+    # Group by (dpid, port)
     port_data = defaultdict(lambda: defaultdict(int))
     
     for entry in traffic_history:
         dpid = entry.get('dpid', 0)
         port = entry.get('port_no', 0)
+        
+        # FILTERING LOGIC: Skip if this isn't the link we want
+        if target_dpid and target_port:
+            if dpid != target_dpid or port != target_port:
+                continue
+
         ts = entry.get('timestamp', '')
-        # Total load = Tx + Rx
+        # Total load = Tx + Rx (Bytes)
         total_bytes = entry.get('tx_bytes', 0) + entry.get('rx_bytes', 0)
         port_data[(dpid, port)][ts] = total_bytes
     
+    # If filtering returned no data
+    if not port_data:
+        return [0], 0, 0
+
     # Get all unique timestamps sorted
     all_timestamps = set()
     for port_key in port_data:
@@ -283,7 +294,7 @@ def get_traffic_data_for_plot(minutes=2):
     
     bytes_per_second = []
     
-    # Calculate Sum of Deltas per second
+    # Calculate Deltas
     for i in range(1, len(sorted_timestamps)):
         prev_ts = sorted_timestamps[i-1]
         curr_ts = sorted_timestamps[i]
@@ -311,12 +322,29 @@ def get_traffic_data_for_plot(minutes=2):
 
 @app.route('/api/prediction')
 def get_prediction():
-    """Returns the latest prediction for the graph using the specialized managers"""
+    """Returns prediction for a SPECIFIC LINK if provided"""
     try:
-        # 1. Get Cleaned Traffic Data
-        traffic_series, current_traffic, avg_traffic = get_traffic_data_for_plot(minutes=2)
+        # 1. Parse Link ID from URL (e.g., ?link_id=s1-eth1)
+        link_id = request.args.get('link_id')
+        target_dpid = None
+        target_port = None
+
+        if link_id and '-' in link_id:
+            try:
+                # Parse "s1-eth2" -> dpid=1, port=2
+                parts = link_id.replace('s', '').split('-eth')
+                target_dpid = int(parts[0])
+                target_port = int(parts[1])
+            except:
+                print(f"Invalid link_id format: {link_id}")
+
+        # 2. Get Traffic for that specific link
+        traffic_series, current_traffic, avg_traffic = get_traffic_data_for_plot(
+            minutes=2, 
+            target_dpid=target_dpid, 
+            target_port=target_port
+        )
         
-        # Prepare Fallback Defaults
         response = {
             'state': 'NORMAL',
             'confidence': 0.0,
@@ -324,7 +352,8 @@ def get_prediction():
             'current_traffic': current_traffic,
             'future_values': [],
             'prediction_horizon': 30,
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'link_id': link_id or 'Aggregate'
         }
 
         if len(traffic_series) < 10:
@@ -332,36 +361,24 @@ def get_prediction():
             response['state'] = 'LOADING...'
             return jsonify(response)
 
-        # 2. Run Classification (State Manager)
+        # 3. Run Models on this specific series
+        input_data = np.array(traffic_series, dtype=np.float32)
+
+        # Classifier (State Manager)
         if state_manager:
             try:
-                # Convert to numpy array for model
-                input_data = np.array(traffic_series, dtype=np.float32)
                 result = state_manager.predict(input_data)
                 
                 if result:
                     response['state'] = result['state']
                     response['confidence'] = result['confidence']
                     response['color'] = result['color']
-                    # Use the estimated bandwidth from classifier as a reference point?
-                    # response['estimated_bandwidth'] = result['estimated_bandwidth']
             except Exception as e:
                 print(f"[API] Classification failed: {e}")
 
-        # 3. Run Regression (Seq2Seq Manager)
+        # Seq2Seq Manager
         if seq2seq_manager:
             try:
-                # Seq2Seq expects similar input
-                input_data = np.array(traffic_series, dtype=np.float32)
-                # Ensure we select a generic link or aggregate for the visualization
-                # Since get_traffic_data_for_plot returns aggregate network load,
-                # passing it to seq2seq might result in scale issues if model trained on single link.
-                # However, for visualization, the shape matters most.
-                
-                # Note: seq2seq_manager.predict usually expects a link_id to fetch from DB, 
-                # OR raw data. Let's assume we pass raw data directly if the class supports it.
-                # If your Seq2SeqManager.predict ONLY accepts link_id, we might need a workaround.
-                # Assuming updated Seq2SeqManager accepts raw numpy array:
                 future_preds = seq2seq_manager.predict(input_data)
                 
                 if future_preds is not None:
@@ -375,6 +392,30 @@ def get_prediction():
     except Exception as e:
         print(f"API Prediction Error: {e}")
         return jsonify({'error': str(e)})
+
+# --- ADD THIS ROUTE FOR DASHBOARD AUTO-REFRESH ---
+@app.route('/api/dashboard-data')
+def api_dashboard_data():
+    """
+    API endpoint that returns the full topology and flow table 
+    status for the JavaScript auto-refresh logic.
+    """
+    try:
+        switches = get_active_switches()
+        hosts = get_hosts()
+        flows, _ = get_all_flow_stats()
+        topo_info = get_topology_info()
+        
+        return jsonify({
+            'switches': switches,
+            'hosts': hosts,
+            'flows': flows,
+            'topology': topo_info
+        })
+    except Exception as e:
+        print(f"Dashboard Data Error: {e}")
+        return jsonify({'error': str(e)})
+
 
 def _get_state_color(state):
     colors = {
@@ -396,3 +437,4 @@ def start_web_server(host='0.0.0.0', port=5000):
 
 if __name__ == '__main__':
     start_web_server()
+

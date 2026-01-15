@@ -16,17 +16,8 @@
         <div class="header-controls">
             <div class="live-indicator"><span class="live-dot"></span><span>LIVE</span></div>
             
-            <div class="model-selector">
-                <label for="scenario-select">Model:</label>
-                <select id="scenario-select" onchange="switchModel(this.value)">
-                    <option value="mixed">Mixed (All)</option>
-                    <option value="normal">Normal</option>
-                    <option value="burst">Burst</option>
-                    <option value="congestion">Congestion</option>
-                    <option value="ddos">DDoS</option>
-                </select>
-                <span id="model-status"></span>
-            </div>
+            <div id="controls-area" class="d-flex justify-content-end align-items-center">
+    </div>
 
             <button class="theme-toggle" onclick="toggleTheme()">
                 <span class="theme-icon" id="theme-icon">🌙</span><span id="theme-text">Dark</span>
