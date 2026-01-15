@@ -8,12 +8,44 @@ function updateThemeUI(theme) {
     if (!document.body) return; 
     const isLight = theme === 'light';
     document.body.setAttribute('data-theme', theme);
+    
+    // Update Toggle Button Text/Icon
+    const icon = document.getElementById('theme-icon');
+    const text = document.getElementById('theme-text');
+    if(icon && text) {
+        icon.textContent = isLight ? '🌙' : '☀️';
+        text.textContent = isLight ? 'Dark' : 'Light';
+    }
+
+    // Update Network Graph Colors
     if (network) {
         network.setOptions({
             nodes: { font: { color: isLight ? '#333' : '#eee' } },
             edges: { color: isLight ? '#95a5a6' : '#666' }
         });
     }
+
+    // Update Select Box Style
+    const select = document.getElementById('link-select');
+    const label = document.querySelector('label[for="link-select"]'); // Or find by wrapper
+    
+    if (select) {
+        select.style.backgroundColor = isLight ? '#fff' : '#2c3e50';
+        select.style.color = isLight ? '#333' : '#ecf0f1';
+        select.style.borderColor = isLight ? '#ced4da' : '#4a6fa5';
+    }
+    // Update Label color explicitly if needed (CSS might handle it via data-theme, but let's be safe)
+    if (label) {
+        label.style.color = isLight ? '#333' : '#ecf0f1';
+    }
+}
+
+// RESTORED MISSING FUNCTION
+function toggleTheme() {
+    const currentTheme = document.body.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', newTheme);
+    updateThemeUI(newTheme);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -22,6 +54,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Create UI
     createLinkSelectorUI();
+    
+    // RE-APPLY Theme to newly created UI elements 
+    updateThemeUI(savedTheme);
+
     initChart();
     initNetwork(); 
     
@@ -35,21 +71,26 @@ document.addEventListener('DOMContentLoaded', () => {
 function createLinkSelectorUI() {
     let container = document.getElementById('controls-area'); 
     
-    // Fallback if you didn't add the div in Step 1
     if (!container) {
         container = document.querySelector('.card-header'); 
     }
 
     if (container && !document.getElementById('link-select')) {
         const wrapper = document.createElement('div');
-        wrapper.className = "d-flex align-items-center";
+        wrapper.className = "d-flex align-items-center link-selector-wrapper";
+        // Inline style for better spacing
+        wrapper.style.marginRight = "15px";
+        wrapper.style.padding = "5px 10px";
+        wrapper.style.borderRadius = "5px";
+        wrapper.style.backgroundColor = "rgba(0,0,0,0.05)"; // Slight background
+
         wrapper.innerHTML = `
-            <label class="me-2 fw-bold small mb-0">Monitor Link:</label>
-            <select id="link-select" class="form-select form-select-sm" style="width: auto; min-width: 220px;">
+            <label for="link-select" class="me-2 fw-bold small mb-0" style="white-space: nowrap;">Monitor Link:</label>
+            <select id="link-select" class="form-select form-select-sm" style="width: auto; min-width: 200px; cursor: pointer;">
                 <option value="">Global Network Load (Aggregate)</option>
             </select>
         `;
-        container.appendChild(wrapper);
+        container.insertBefore(wrapper, container.firstChild); // Insert at start if possible
 
         document.getElementById('link-select').addEventListener('change', (e) => {
             selectedLink = e.target.value;
