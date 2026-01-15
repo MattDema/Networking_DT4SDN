@@ -144,6 +144,7 @@ class Seq2SeqPredictor:
     def predict(self, historical_data: np.ndarray) -> np.ndarray:
         """
         Predict 60 future traffic values from historical data.
+        Returns raw model predictions without any post-processing.
         """
         # Ensure correct shape
         if historical_data.ndim == 1:
@@ -157,11 +158,7 @@ class Seq2SeqPredictor:
         elif len(historical_data) > self.sequence_length:
             historical_data = historical_data[-self.sequence_length:]
         
-        # Calculate input stats BEFORE normalization (in original bytes/s)
-        input_mean = float(np.mean(historical_data))
-        input_max = float(np.max(historical_data))
-        
-        # Normalize
+        # Normalize using scaler
         if self.scaler is not None:
             data_scaled = self.scaler.transform(historical_data.astype(np.float32))
         else:
@@ -177,23 +174,12 @@ class Seq2SeqPredictor:
         predictions = output[0].cpu().numpy() if output.dim() == 2 else output.cpu().numpy()
         predictions = predictions.reshape(-1, 1)
         
-        # Inverse transform
+        # Inverse transform to get back to original scale
         if self.scaler is not None:
             predictions = self.scaler.inverse_transform(predictions)
         
-        predictions = predictions.flatten()
-        
-        # CRITICAL: If input traffic is very low, scale predictions DOWN
-        # This prevents the model from "hallucinating" patterns when there's no traffic
-        LOW_TRAFFIC_THRESHOLD = 5000  # 5 KB/s - be aggressive
-        
-        if input_mean < LOW_TRAFFIC_THRESHOLD:
-            # Very low traffic - predictions should stay near actual input
-            scale = max(0.001, input_mean / LOW_TRAFFIC_THRESHOLD)
-            # Blend heavily toward actual input mean
-            predictions = predictions * scale * 0.1 + input_mean * 0.9
-        
-        return np.clip(predictions, 0, None)
+        # Just clip to non-negative, no other processing
+        return np.clip(predictions.flatten(), 0, None)
     
     def get_info(self) -> Dict:
         return {
