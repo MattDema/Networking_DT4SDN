@@ -96,7 +96,22 @@ def determine_scenario(traffic_window):
         # Low volatility = Sustained Attack = DDOS
         if std_dev < (avg_load * 0.4):
             return 'DDOS'
-        # High volatility = Spiky = BURST
+
+# 2. The "Sustained High" Check (TUNED)
+        # Instead of 10s, we check the last 25 seconds.
+        # Ideally, a Burst should finish within 25 seconds.
+        check_duration = 25 
+        
+        if len(traffic_window) > check_duration:
+            sustained_window = traffic_window[-check_duration:]
+            min_sustained = np.min(sustained_window)
+            
+            # If the LOWEST point in the last 25s is STILL critical,
+            # then it never dropped. It's a DDoS.
+            if min_sustained > CRITICAL_LOAD_THRESHOLD:
+                return 'DDOS'
+
+        # If it hasn't been 25 seconds yet, or if it dipped recently, keep calling it BURST.
         return 'BURST'
 
     # Rule 2: High Traffic (Congestion or Light DDoS)
