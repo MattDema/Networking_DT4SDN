@@ -264,6 +264,108 @@ class StatePredictor:
         }
 
 
+class StateManager:
+    """
+    Manager for multiple classifier models.
+    Allows switching between different scenario models.
+    """
+    
+    SCENARIOS = ['normal', 'burst', 'congestion', 'ddos', 'mixed']
+    
+    def __init__(self, models_dir: str):
+        """
+        Initialize manager and discover available models.
+        
+        Args:
+            models_dir: Directory containing classifier model files
+        """
+        self.models_dir = models_dir
+        self.available_models = {}
+        self.current_model = None
+        self.current_scenario = None
+        
+        # Discover available models
+        self._discover_models()
+        
+        # Load default model (mixed or first available)
+        if 'mixed' in self.available_models:
+            self.switch_model('mixed')
+        elif self.available_models:
+            self.switch_model(list(self.available_models.keys())[0])
+    
+    def _discover_models(self):
+        """Find all available classifier models in the directory."""
+        import glob
+        
+        pattern = os.path.join(self.models_dir, '*_classifier_3050.pt')
+        files = glob.glob(pattern)
+        
+        for f in files:
+            basename = os.path.basename(f)
+            for scenario in self.SCENARIOS:
+                if basename.startswith(scenario):
+                    self.available_models[scenario] = f
+                    break
+        
+        print(f"[StateManager] Found models: {list(self.available_models.keys())}")
+    
+    def switch_model(self, scenario: str) -> bool:
+        """
+        Switch to a different scenario model.
+        
+        Args:
+            scenario: One of 'normal', 'burst', 'congestion', 'ddos', 'mixed'
+        
+        Returns:
+            True if switch successful, False otherwise
+        """
+        if scenario not in self.available_models:
+            print(f"[StateManager] Model '{scenario}' not available")
+            return False
+        
+        if scenario == self.current_scenario:
+            return True  # Already loaded
+        
+        try:
+            model_path = self.available_models[scenario]
+            self.current_model = StatePredictor(model_path)
+            self.current_scenario = scenario
+            print(f"[StateManager] Switched to: {scenario}")
+            return True
+        except Exception as e:
+            print(f"[StateManager] Error loading {scenario}: {e}")
+            return False
+    
+    def predict(self, historical_data: np.ndarray, current_avg: float = None) -> Optional[Dict]:
+        """Predict using current model."""
+        if self.current_model is None:
+            return None
+        return self.current_model.predict(historical_data, current_avg)
+    
+    @property
+    def sequence_length(self) -> int:
+        """Get sequence length from current model."""
+        if self.current_model:
+            return self.current_model.sequence_length
+        return 90
+    
+    def get_available_models(self) -> list:
+        """Return list of available models."""
+        return list(self.available_models.keys())
+    
+    def get_current_model(self) -> Optional[str]:
+        """Return current model name."""
+        return self.current_scenario
+    
+    def get_info(self) -> Dict:
+        """Return manager info."""
+        return {
+            'available_models': list(self.available_models.keys()),
+            'current_model': self.current_scenario,
+            'model_info': self.current_model.get_model_info() if self.current_model else None
+        }
+
+
 def test_predictor():
     """Test the state predictor."""
     import glob
@@ -295,3 +397,4 @@ def test_predictor():
 
 if __name__ == '__main__':
     test_predictor()
+

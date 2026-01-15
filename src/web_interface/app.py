@@ -17,62 +17,37 @@ if src_dir not in sys.path:
 
 # Now we can import directly from 'database' (since 'src' is in path)
 from database.db_manager import get_db
-from ml_models.state_predictor import StatePredictor
-from ml_models.seq2seq_predictor import Seq2SeqPredictor
+from ml_models.state_predictor import StatePredictor, StateManager
+from ml_models.seq2seq_predictor import Seq2SeqPredictor, Seq2SeqManager
 import numpy as np
 
 # Get project root
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 models_dir = os.path.join(project_root, 'models')
 
-# Initialize state predictor (classifier)
-state_predictor = None
+# Initialize model managers (support multiple scenarios)
+state_manager = None
+seq2seq_manager = None
+
 try:
-    import glob
-    model_pattern = os.path.join(models_dir, '*_classifier_3050.pt')
-    model_files = glob.glob(model_pattern)
-    
-    print(f"Looking for classifier models in: {models_dir}")
-    print(f"Found: {model_files}")
-    
-    if model_files:
-        mixed_model = [f for f in model_files if 'mixed' in f]
-        model_path = mixed_model[0] if mixed_model else model_files[0]
-        state_predictor = StatePredictor(model_path)
-        print(f"✓ StatePredictor loaded: {model_path}")
-    else:
-        print(f"⚠️ No classifier models found")
+    state_manager = StateManager(models_dir)
+    print(f"✓ StateManager initialized with models: {state_manager.get_available_models()}")
 except Exception as e:
-    print(f"⚠️ Could not load StatePredictor: {e}")
+    print(f"⚠️ Could not initialize StateManager: {e}")
     import traceback
     traceback.print_exc()
 
-# Initialize seq2seq predictor (for graph visualization)
-seq2seq_predictor = None
 try:
-    # Try A100 models first, then regular models folder
-    seq2seq_dir = os.path.join(models_dir, 'seq2seqA100')
-    if not os.path.exists(seq2seq_dir):
-        seq2seq_dir = models_dir
-    
-    seq_pattern = os.path.join(seq2seq_dir, '*_seq2seq_3050.pt')
-    seq_files = glob.glob(seq_pattern)
-    
-    print(f"Looking for seq2seq models in: {seq2seq_dir}")
-    print(f"Found: {seq_files}")
-    
-    if seq_files:
-        # Prefer mixed model
-        mixed_seq = [f for f in seq_files if 'mixed' in f]
-        seq_path = mixed_seq[0] if mixed_seq else seq_files[0]
-        seq2seq_predictor = Seq2SeqPredictor(seq_path)
-        print(f"✓ Seq2SeqPredictor loaded: {seq_path}")
-    else:
-        print(f"⚠️ No seq2seq models found")
+    seq2seq_manager = Seq2SeqManager(models_dir)
+    print(f"✓ Seq2SeqManager initialized with models: {seq2seq_manager.get_available_models()}")
 except Exception as e:
-    print(f"⚠️ Could not load Seq2SeqPredictor: {e}")
+    print(f"⚠️ Could not initialize Seq2SeqManager: {e}")
     import traceback
     traceback.print_exc()
+
+# Backwards compatibility aliases
+state_predictor = state_manager
+seq2seq_predictor = seq2seq_manager
 
 # --- CONFIGURATION ---
 # We define these here because the Dashboard needs them to fetch live data
@@ -464,6 +439,28 @@ DASHBOARD_HTML = """
                 <span class="live-dot"></span>
                 <span>LIVE</span>
             </div>
+            
+            <!-- Model Selector -->
+            <div class="model-selector">
+                <label for="scenario-select" style="font-size: 12px; color: var(--text-secondary); margin-right: 8px;">Model:</label>
+                <select id="scenario-select" onchange="switchModel(this.value)" style="
+                    background: var(--bg-card);
+                    border: 1px solid var(--border);
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    color: var(--text-primary);
+                    font-size: 13px;
+                    cursor: pointer;
+                ">
+                    <option value="mixed">Mixed (All)</option>
+                    <option value="normal">Normal</option>
+                    <option value="burst">Burst</option>
+                    <option value="congestion">Congestion</option>
+                    <option value="ddos">DDoS</option>
+                </select>
+                <span id="model-status" style="font-size: 11px; margin-left: 8px; color: var(--text-secondary);"></span>
+            </div>
+            
             <button class="theme-toggle" onclick="toggleTheme()">
                 <span class="theme-icon" id="theme-icon">🌙</span>
                 <span id="theme-text">Dark</span>
@@ -669,6 +666,55 @@ DASHBOARD_HTML = """
                 text.textContent = 'Dark';
             }
         }
+        
+        // ===== MODEL SWITCHING =====
+        async function switchModel(scenario) {
+            const statusEl = document.getElementById('model-status');
+            statusEl.textContent = '⏳ Switching...';
+            statusEl.style.color = 'orange';
+            
+            try {
+                const response = await fetch('/api/models/switch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({scenario: scenario})
+                });
+                const data = await response.json();
+                
+                if (data.classifier_switched && data.seq2seq_switched) {
+                    statusEl.textContent = '✓ ' + scenario.toUpperCase();
+                    statusEl.style.color = '#27ae60';
+                } else {
+                    statusEl.textContent = '⚠️ Partial';
+                    statusEl.style.color = 'orange';
+                }
+                
+                console.log('Model switched:', data);
+            } catch (err) {
+                statusEl.textContent = '❌ Error';
+                statusEl.style.color = '#e74c3c';
+                console.error('Switch error:', err);
+            }
+            
+            // Clear status after 3s
+            setTimeout(() => {
+                statusEl.textContent = '';
+            }, 3000);
+        }
+        
+        // Load current model on page load
+        async function loadCurrentModel() {
+            try {
+                const response = await fetch('/api/models');
+                const data = await response.json();
+                if (data.classifier && data.classifier.current_model) {
+                    document.getElementById('scenario-select').value = data.classifier.current_model;
+                }
+            } catch (err) {
+                console.error('Could not load current model:', err);
+            }
+        }
+        loadCurrentModel();
         
         // ===== PREDICTION CHART (IMPROVED) =====
         const ctx = document.getElementById('predictionChart');
@@ -1096,6 +1142,8 @@ def api_prediction():
             result['avg_traffic'] = avg_traffic
             result['timestamp'] = time.time()
             result['model_used'] = True
+            result['classifier_model'] = state_manager.get_current_model() if state_manager else None
+            result['seq2seq_model'] = seq2seq_manager.get_current_model() if seq2seq_manager else None
             
             # Use seq2seq for actual future values (for graph visualization)
             if seq2seq_predictor:
@@ -1147,6 +1195,53 @@ def api_prediction():
             'estimated_bandwidth': 0,
             'color': '#666666'
         })
+
+
+# --- MODEL MANAGEMENT API ---
+
+@app.route('/api/models')
+def api_models():
+    """
+    Get available models and current selection.
+    Returns: list of available scenarios and currently active model
+    """
+    return jsonify({
+        'classifier': state_manager.get_info() if state_manager else None,
+        'seq2seq': seq2seq_manager.get_info() if seq2seq_manager else None
+    })
+
+
+@app.route('/api/models/switch', methods=['POST'])
+def api_switch_model():
+    """
+    Switch to a different scenario model.
+    POST body: {"scenario": "normal|burst|congestion|ddos|mixed"}
+    """
+    from flask import request
+    
+    data = request.get_json() or {}
+    scenario = data.get('scenario', '').lower()
+    
+    if not scenario:
+        return jsonify({'error': 'Missing scenario parameter'}), 400
+    
+    valid_scenarios = ['normal', 'burst', 'congestion', 'ddos', 'mixed']
+    if scenario not in valid_scenarios:
+        return jsonify({'error': f'Invalid scenario. Must be one of: {valid_scenarios}'}), 400
+    
+    results = {'scenario': scenario}
+    
+    # Switch classifier
+    if state_manager:
+        results['classifier_switched'] = state_manager.switch_model(scenario)
+        results['classifier_current'] = state_manager.get_current_model()
+    
+    # Switch seq2seq
+    if seq2seq_manager:
+        results['seq2seq_switched'] = seq2seq_manager.switch_model(scenario)
+        results['seq2seq_current'] = seq2seq_manager.get_current_model()
+    
+    return jsonify(results)
 
 
 def start_web_server(host='0.0.0.0', port=5000):

@@ -30,7 +30,7 @@ models/previous
 tests/
 
 # Visuals
-visuals/
+# visuals/
 
 # IDE
 .vscode/
