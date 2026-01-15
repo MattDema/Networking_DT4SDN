@@ -61,12 +61,13 @@
         <!-- Main Content -->
         <div class="main-content">
             <!-- 1. LIVE TOPOLOGY (Wide) -->
-            <div class="card" style="display: flex; flex-direction: column; height: 500px;">
+            <div class="card" style="display: flex; flex-direction: column;">
                 <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
                     <h3>🗺️ Live Topology</h3>
                     <span style="font-size: 0.8em; color: gray;">Drag nodes to rearrange</span>
                 </div>
-                <div id="mynetwork" style="flex: 1; border: 1px solid #eee; border-radius: 4px;"></div>
+                <!-- CSS defines height for #mynetwork -->
+                <div id="mynetwork"></div> 
             </div>
 
             <!-- 2. PREDICTION CHART (Wide) -->
@@ -106,25 +107,6 @@
                             {% endfor %}
                         </tbody>
                     </table>
-                </div>
-            </div>
-
-            <!-- NUOVO: Traffic Prediction Graph -->
-            <div class="card full-width">
-                <h3>📈 Traffic Prediction Graph (Physical vs Digital Twin)</h3>
-                <div style="position: relative; height: 350px; width: 100%;">
-                    <canvas id="predictionChart"></canvas>
-                </div>
-                <div class="chart-legend">
-                    <div>
-                        <span class="legend-line physical"></span>
-                        <span>Physical (Actual)</span>
-                        <span class="legend-line digital"></span>
-                        <span>Digital (Predicted)</span>
-                    </div>
-                    <div id="prediction-status" class="status-badge">
-                        Loading...
-                    </div>
                 </div>
             </div>
         </div>
