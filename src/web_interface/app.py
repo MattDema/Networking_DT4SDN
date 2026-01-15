@@ -1152,12 +1152,10 @@ def api_prediction():
             state = result.get('state', 'UNKNOWN')
             conf = result.get('confidence', 0) * 100
             
+            
             print(f"[API] {timestamp} | Traffic: {current_traffic:,.0f} B/s | "
                   f"State: {state} ({conf:.0f}%) | Model: {model_name} | "
                   f"Seq2Seq: {'✓' if has_seq2seq else '✗'}")
-
-            else:
-                result['future_values'] = None
             
             return jsonify(result)
         else:
