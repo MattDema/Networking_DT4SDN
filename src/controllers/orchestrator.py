@@ -7,7 +7,7 @@ import numpy as np
 import sys
 import os
 
-# -- GETTING PATHS TO ACCESS CLASSES INSTANCES  -- 
+# -- GETTING PATHS TO ACCESS CLASSES INSTANCES  --
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.dirname(current_dir)
 sys.path.append(src_dir)
@@ -16,10 +16,14 @@ project_root= os.path.dirname(src_dir)
 from database.db_manager import get_db
 from ml_models.traffic_predictor import TrafficPredictor
 from web_interface.app import start_web_server, get_active_switches, get_hosts, RYU_API_URL
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+COLLECTION_INTERVAL = 1  # Seconds between data collection polls
 from utils.traffic_manager import TrafficManager
 
 # --- CONFIGURATION ---
-COLLECTION_INTERVAL = 2  # How often to read from Physical Twin
 PREDICTION_INTERVAL = 5  # How often to predict the future
 
 MODELS = {
@@ -45,16 +49,16 @@ LINK_BW_MBPS = 30
 
 
 # --- TOPOLOGY CONFIGURATION ---
-CURRENT_TOPO_NAME = "GENERATED_MESH_3" 
+CURRENT_TOPO_NAME = "GENERATED_MESH_3"
 
 REDUNDANCY_CONFIG = {
     "GENERATED_MESH_3": {
         # Switch 1 usually sends to Switch 2 via Port 1.
         # If that fails, it reroutes to Switch 3 via Port 2.
-        1: 2,  
-        
-        # Switch 3 is the "Detour Switch". 
-        # If it gets congested sending to Switch 2 via Port 2 (direct), 
+        1: 2,
+
+        # Switch 3 is the "Detour Switch".
+        # If it gets congested sending to Switch 2 via Port 2 (direct),
         # it could reroute back to Switch 1 via Port 1 (though that's a loop, so be careful).
         # For this demo, we only need to heal Switch 1.
     }
@@ -82,22 +86,32 @@ RYU_API_URL = f"http://{PT_IP}:8080"
 
 
 def collect_data_periodically():
-    """Background thread to collect and store traffic data from Ryu."""
+    """
+    Background thread to collect and store traffic data from Ryu Controller.
+
+    This function:
+    1. Polls the Ryu REST API for active switches
+    2. Collects Port Statistics (rx/tx bytes, packets)
+    3. Collects Flow Statistics (active rules)
+    4. Discovers connected Hosts
+    5. Stores all data in the SQLite database
+    """
     db = get_db()
-    print(f"✅ [Collector] Started - polling every {COLLECTION_INTERVAL}s")
+    print(f"[Collector] STARTED: Polling every {COLLECTION_INTERVAL}s")
 
     while True:
         try:
-            # Get active switches from Ryu (using helper from app.py)
+            # 1. Get Switches
             switches = get_active_switches()
+            if not switches:
+                continue
 
             for dpid in switches:
-                # A. Collect Port Stats
+                # 2. Collect Port Stats
                 try:
                     url = f"{RYU_API_URL}/stats/port/{dpid}"
-                    resp = requests.get(url, timeout=2)
+                    resp = requests.get(url, timeout=0.5)
                     ports = resp.json().get(str(dpid), [])
-
                     for port in ports:
                         db.save_port_stats(
                             dpid=dpid,
@@ -110,12 +124,11 @@ def collect_data_periodically():
                 except Exception:
                     pass
 
-                # B. Collect Flow Stats (Optional, good for debugging)
+                # 3. Collect Flow Stats
                 try:
                     url = f"{RYU_API_URL}/stats/flow/{dpid}"
-                    resp = requests.get(url, timeout=2)
+                    resp = requests.get(url, timeout=0.5)
                     flows = resp.json().get(str(dpid), [])
-
                     for flow in flows:
                         db.save_flow_stats(
                             dpid=dpid,
@@ -128,17 +141,25 @@ def collect_data_periodically():
                 except Exception:
                     pass
 
-            # C. Save Hosts
+            # 4. Save Hosts
             hosts = get_hosts()
             for host in hosts:
                 db.save_host(host['mac'], host['dpid'], host['port'])
 
         except Exception as e:
-            print(f"⚠ [Collector] Error: {e}")
+            print(f"[Collector] ERROR: {e}")
 
         time.sleep(COLLECTION_INTERVAL)
 
 
+def print_banner():
+    """Prints the application startup banner."""
+    print("\n" + "="*60)
+    print("   DIGITAL TWIN ORCHESTRATOR   ")
+    print("   Networking DT4SDN Project   ")
+    print("="*60)
+    print(f"Target Physical Twin: {RYU_API_URL}")
+    print("="*60 + "\n")
 def run_prediction_loop():
     """Background thread to predict future traffic using the trained model."""
 
@@ -264,14 +285,10 @@ def run_prediction_loop():
         except Exception as e:
             print(f"⚠ [Predictor] Main Loop Error: {e}")
 
-        time.sleep(PREDICTION_INTERVAL)
 
 # --- MAIN ENTRY POINT ---
 if __name__ == '__main__':
-    print("========================================")
-    print("   DIGITAL TWIN ORCHESTRATOR   ")
-    print("========================================")
-    print(f"Target Physical Twin: {RYU_API_URL}")
+    print_banner()
 
     # 1. Start Collector Thread (Daemon)
     t_col = threading.Thread(target=collect_data_periodically, daemon=True)
