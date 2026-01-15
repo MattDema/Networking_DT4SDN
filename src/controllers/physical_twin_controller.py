@@ -7,17 +7,13 @@ from ryu.app.wsgi import ControllerBase, WSGIApplication, route
 from webob import Response
 import json
 
-# NEW IMPORTS FOR REAL-TIME TOPOLOGY
 from ryu.topology import event, switches
 from ryu.topology.api import get_switch, get_link, get_host
-
-# Add this among your imports
 from ryu.lib import dpid as dpid_lib
 
 class PhysicalTwinController(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
     
-    # Removed 'stplib' from contexts
     _CONTEXTS = {
         'wsgi': WSGIApplication
     }
@@ -26,7 +22,6 @@ class PhysicalTwinController(app_manager.RyuApp):
         super(PhysicalTwinController, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         
-        # We still keep the metadata for the "Type" (e.g. "Linear")
         self.topology_metadata = {"type": "Unknown", "switches": [], "links": [], "hosts": []}
 
         wsgi = kwargs['wsgi']
@@ -38,7 +33,7 @@ class PhysicalTwinController(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        # Install Table-Miss Flow Entry
+        # install table-miss flow entry
         match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
                                           ofproto.OFPCML_NO_BUFFER)]
@@ -59,7 +54,7 @@ class PhysicalTwinController(app_manager.RyuApp):
                                     match=match, instructions=inst)
         datapath.send_msg(mod)
 
-    # --- STANDARD PACKET IN HANDLER (No STP) ---
+    # standard packet-in handler no stp
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
         msg = ev.msg
@@ -79,9 +74,8 @@ class PhysicalTwinController(app_manager.RyuApp):
         dpid = datapath.id
 
         self.mac_to_port.setdefault(dpid, {})
-        # self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
-        # learn a mac address to avoid FLOOD next time.
+        # learn a mac address to avoid flood next time
         self.mac_to_port[dpid][src] = in_port
 
         if dst in self.mac_to_port[dpid]:
@@ -108,7 +102,7 @@ class PhysicalTwinController(app_manager.RyuApp):
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
 
-    # --- Helper methods for REST Controller (KEPT EXACTLY AS IS) ---
+    # helper methods for rest controller
     def set_topology(self, data):
         self.topology_metadata = data
         self.logger.info(f"Topology metadata updated via API: {data.get('type')}")
@@ -120,11 +114,11 @@ class PhysicalTwinController(app_manager.RyuApp):
         - Hosts/Link (H-S): from static JSON (cached)
         """
         
-        # 1. Discover Switches Live
+        # 1. discover switches
         ryu_switches = get_switch(self, None)
         live_switches = [f"s{s.dp.id}" for s in ryu_switches]
         
-        # 2. Discover Links Live (S-S only) - DEDUPLICATED
+        # 2. discover links (s-s only)
         ryu_links = get_link(self, None)
         live_links = []
         seen_pairs = set()
@@ -133,22 +127,22 @@ class PhysicalTwinController(app_manager.RyuApp):
             src = f"s{l.src.dpid}"
             dst = f"s{l.dst.dpid}"
             
-            # Create a sorted tuple representing the link regardless of direction
+            # create a sorted tuple representing the link regardless of direction
             link_pair = tuple(sorted((src, dst)))
             
             if link_pair not in seen_pairs:
                 live_links.append([src, dst])
                 seen_pairs.add(link_pair)
             
-        # 3. Hosts & Host Links (Static Fallback)
+        # 3. hosts & host links
         final_hosts = self.topology_metadata.get("hosts", [])
         static_links = self.topology_metadata.get("links", [])
         static_switches_list = self.topology_metadata.get("switches", [])
         
-        # Start with live links
+        # start with live links
         final_links = list(live_links)
         
-        # Merge Host Links from Static Metadata
+        # merge host links from static metadata
         for link in static_links:
             u, v = link[0], link[1]
             u_is_switch = (u in static_switches_list)
@@ -171,13 +165,13 @@ class TopologyController(ControllerBase):
 
     @route('topology', '/topology/metadata', methods=['GET'])
     def get_metadata(self, req, **kwargs):
-        """Dashboard calls this to get current topology info"""
+        """dashboard calls this to get current topology info"""
         body = json.dumps(self.physical_controller.get_topology())
         return Response(content_type='application/json', charset='utf-8', body=body)
 
     @route('topology', '/topology/metadata', methods=['POST'])
     def set_metadata(self, req, **kwargs):
-        """Mininet script calls this to set current topology info"""
+        """mininet script calls this to set current topology info"""
         try:
             data = json.loads(req.body) if req.body else {}
             self.physical_controller.set_topology(data)
