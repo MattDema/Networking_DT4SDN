@@ -1111,10 +1111,6 @@ def api_prediction():
         current_traffic = bytes_per_second[-1] if bytes_per_second else 0
         avg_traffic = np.mean(bytes_per_second) if bytes_per_second else 0
         
-        # Debug logging
-        print(f"[API] Timestamps: {len(sorted_timestamps)}, Deltas: {len(bytes_per_second)}, "
-              f"Current: {current_traffic:,.0f} B/s, Avg: {avg_traffic:,.0f} B/s")
-        
         # If we have a predictor with enough data, use it
         if state_predictor and len(bytes_per_second) >= 10:
             # Pad if needed
@@ -1122,21 +1118,13 @@ def api_prediction():
             if len(bytes_per_second) < seq_len:
                 padding = [bytes_per_second[0]] * (seq_len - len(bytes_per_second))
                 input_data = padding + bytes_per_second
-                print(f"[ML] Padded: {len(bytes_per_second)} -> {len(input_data)} samples")
             else:
                 input_data = bytes_per_second[-seq_len:]
             
             historical_data = np.array(input_data, dtype=np.float32)
             
-            # Debug: show input stats
-            print(f"[ML] Input stats: min={historical_data.min():.0f}, max={historical_data.max():.0f}, "
-                  f"mean={historical_data.mean():.0f}, std={historical_data.std():.0f}")
-            
+            # Predict
             result = state_predictor.predict(historical_data)
-            
-            # Debug: show prediction
-            print(f"[ML] Prediction: {result['state']} ({result['confidence']*100:.1f}%), "
-                  f"Est BW: {result['estimated_bandwidth']:,.0f} B/s")
             
             result['current_traffic'] = current_traffic
             result['avg_traffic'] = avg_traffic
@@ -1145,15 +1133,29 @@ def api_prediction():
             result['classifier_model'] = state_manager.get_current_model() if state_manager else None
             result['seq2seq_model'] = seq2seq_manager.get_current_model() if seq2seq_manager else None
             
-            # Use seq2seq for actual future values (for graph visualization)
+            # Use seq2seq for actual future values
+            has_seq2seq = False
             if seq2seq_predictor:
                 try:
                     future_values = seq2seq_predictor.predict(historical_data)
                     result['future_values'] = future_values.tolist()
-                    print(f"[SEQ2SEQ] Generated {len(future_values)} future values")
+                    has_seq2seq = True
                 except Exception as e:
-                    print(f"[SEQ2SEQ] Error: {e}")
+                    print(f"⚠️ [Seq2Seq] Error: {e}")
                     result['future_values'] = None
+            else:
+                result['future_values'] = None
+
+            # Compact Log
+            timestamp = time.strftime("%H:%M:%S")
+            model_name = result.get('classifier_model', 'Unknown').upper()
+            state = result.get('state', 'UNKNOWN')
+            conf = result.get('confidence', 0) * 100
+            
+            print(f"[API] {timestamp} | Traffic: {current_traffic:,.0f} B/s | "
+                  f"State: {state} ({conf:.0f}%) | Model: {model_name} | "
+                  f"Seq2Seq: {'✓' if has_seq2seq else '✗'}")
+
             else:
                 result['future_values'] = None
             

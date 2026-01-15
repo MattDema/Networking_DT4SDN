@@ -1,10 +1,15 @@
 # src/ml_models/seq2seq_predictor.py
 """
-Seq2Seq Traffic Predictor for Graph Visualization
+Seq2Seq Traffic Predictor - Sequence-to-Sequence Time Series Forecasting
 
-Loads trained seq2seq models and predicts 60 future traffic values.
-Supports both A100-trained models (CNN+LSTM) and laptop models (FastSeq2Seq).
+This module handles:
+1. Loading multi-scenario Seq2Seq models (Normal, Burst, DDoS, etc.)
+2. Auto-detecting architecture (CNN+LSTM vs FastLSTM)
+3. Generating 60-second forward predictions for graph visualization
 """
+
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 
 import torch
 import torch.nn as nn

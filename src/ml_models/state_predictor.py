@@ -2,11 +2,16 @@
 """
 State Predictor - Classification-based traffic state prediction
 
-Loads trained classifier models and predicts traffic state:
-- NORMAL, ELEVATED, HIGH, CRITICAL
-
-Also estimates bandwidth from predicted state using saved thresholds.
+This module handles:
+1. Loading classification models (BiLSTM architecture)
+2. Normalizing input traffic data
+3. Predicting traffic states (NORMAL, ELEVATED, HIGH, CRITICAL)
+4. Estimating bandwidth usage based on predicted state
 """
+
+import warnings
+# Suppress sklearn version warnings when loading older scalers
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 
 import torch
 import torch.nn as nn

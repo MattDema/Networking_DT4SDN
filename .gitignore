@@ -1,9 +1,23 @@
-# .gitignore
+# =============================================================================
+# GITIGNORE - Networking Digital Twin for SDN
+# =============================================================================
+# This file specifies which files and directories should be excluded from
+# version control. Organized by category with detailed explanations.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# PYTHON ENVIRONMENT AND BYTECODE
+# -----------------------------------------------------------------------------
+# Virtual environment directory (contains installed packages, not project code)
 venv/
+
+# Python compiled bytecode files (regenerated automatically on import)
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Python internals
 .Python
 *.so
 *.egg
@@ -11,44 +25,90 @@ __pycache__/
 dist/
 build/
 
-
-# Data files
+# -----------------------------------------------------------------------------
+# DATA FILES
+# -----------------------------------------------------------------------------
+# SQLite database file (generated at runtime, contains collected traffic data)
 data/digital_twin.db
+
+# Training data exports (large CSV files generated for ML training)
 data/training/*
+
+# Runtime logs (generated during operation)
 data/logs/*
+
+# Keep directory structure placeholders
 !data/**/.gitkeep
 
-# Docs Files
+# -----------------------------------------------------------------------------
+# DOCUMENTATION
+# -----------------------------------------------------------------------------
+# Previous/archived documentation versions
 docs/previous/
 
-# Models
+# -----------------------------------------------------------------------------
+# MACHINE LEARNING MODELS - ARCHIVED/DEVELOPMENT
+# -----------------------------------------------------------------------------
+# Old classifier models before A100 training (superseded by current models)
 models/b4_classifier
 models/beforeA100
 models/previous
 
-# Tests
+# Note: Current production models in models/ and models/seq2seqA100/ ARE tracked
+
+# -----------------------------------------------------------------------------
+# DEVELOPMENT AND TESTING
+# -----------------------------------------------------------------------------
+# Test files and scripts (not needed in production)
 tests/
 
-# Visuals
+# Training visualizations and result plots (generated during training)
 visuals/
 
-# IDE
+# Reference repositories used during development
+reference/
+
+# -----------------------------------------------------------------------------
+# IDE AND EDITOR FILES
+# -----------------------------------------------------------------------------
+# Visual Studio Code workspace settings
 .vscode/
+
+# JetBrains IDEs (PyCharm, etc.)
 .idea/
+
+# Vim swap files
 *.swp
 *.swo
 
-# Reference repos
-reference/
-
-# OS
+# -----------------------------------------------------------------------------
+# OPERATING SYSTEM FILES
+# -----------------------------------------------------------------------------
+# macOS folder metadata
 .DS_Store
+
+# Windows thumbnail cache
 Thumbs.db
 
-# ML models (large files)
+# -----------------------------------------------------------------------------
+# LARGE BINARY FILES
+# -----------------------------------------------------------------------------
+# Keras/TensorFlow model files (if any)
 *.h5
+
+# PyTorch model files (optional, large files)
+# Note: We track .pt files in models/ for deployment, but exclude others
 *.pth
 
-# Database
+# Database files (runtime generated)
 *.db
 *.sqlite
+
+# -----------------------------------------------------------------------------
+# TRAINING SCRIPTS - KEEP MAIN ONES ONLY
+# -----------------------------------------------------------------------------
+# The following training scripts are kept in version control:
+#   - src/ml_models/training/train_state_classifier_laptop.py (main classifier)
+#   - src/ml_models/training/train_seq2seq_predictor.py (main seq2seq)
+#
+# Experimental/temporary training scripts should be added here if created
