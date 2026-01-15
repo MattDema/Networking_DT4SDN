@@ -1,6 +1,4 @@
 # src/database/db_manager.py
-# SQLite database manager for Digital Twin
-
 import sqlite3
 import json
 import os
@@ -28,14 +26,13 @@ class DatabaseManager:
         schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
         
         with self._get_connection() as conn:
-            # If you have a schema.sql file, load it. 
-            # Otherwise, we assume the tables exist or this part handles creation.
+            # If schema.sql file exists, load it. 
             if os.path.exists(schema_path):
                 with open(schema_path, 'r') as f:
                     conn.executescript(f.read())
             conn.commit()
     
-    # --- TRAFFIC STATS ---
+    # traffic stats
     def save_port_stats(self, dpid: int, port_no: int, 
                         rx_packets: int, tx_packets: int,
                         rx_bytes: int, tx_bytes: int):
@@ -73,7 +70,7 @@ class DatabaseManager:
                    json.dumps(f.get('actions', []))) for f in flows])
             conn.commit()
     
-    # --- HOSTS ---
+    # hosts
     def save_host(self, mac_address: str, dpid: int, port: int):
         """Save or update a discovered host."""
         with self._get_connection() as conn:
@@ -93,7 +90,7 @@ class DatabaseManager:
             rows = conn.execute('SELECT * FROM hosts ORDER BY last_seen DESC').fetchall()
             return [dict(row) for row in rows]
     
-    # --- QUERIES FOR ML ---
+    # queries for ml
     def get_traffic_history(self, dpid: int = None, 
                             minutes: int = 60) -> List[Dict]:
         """Get traffic history for ML training."""
@@ -130,7 +127,7 @@ class DatabaseManager:
                 ''', (f'-{minutes} minutes',)).fetchall()
             return [dict(row) for row in rows]
     
-    # --- PREDICTIONS ---
+    # predictions
     def save_prediction(self, dpid: int, port: int, predicted_packets: int,
                         predicted_bytes: int, horizon: int = 30):
         """Save a traffic prediction."""
@@ -174,23 +171,22 @@ class DatabaseManager:
     def get_recent_traffic(self, link_id: str, duration_seconds: int = 60):
         """
         Fetches recent traffic history for a specific link ID.
-        Calculates the DELTA (Speed) between rows.
+        Calculates the delta (speed) between rows.
         """
         import pandas as pd
 
-        # 1. Parse ID (e.g. "s1-eth1" -> dpid=1, port=1)
+        # parse id ("s1-eth1" -> dpid=1, port=1)
         try:
             clean_id = link_id.replace('s', '')
             parts = clean_id.split('-eth')
             dpid = int(parts[0])
             port_no = int(parts[1])
         except Exception:
-            # Return empty DF if parsing fails
+            # return empty df if parsing fails
             return pd.DataFrame()
 
         with self._get_connection() as conn:
-            # 2. Fetch Data
-            # We fetch more rows than needed (duration * 3) to ensure we have enough 
+            # fetch data, more rows than needed (duration * 3) to ensure we have enough 
             # points to calculate differences even if some polls were missed.
             limit = duration_seconds * 3
             query = '''
@@ -203,22 +199,22 @@ class DatabaseManager:
             df = pd.read_sql_query(query, conn, params=(dpid, port_no, limit))
 
         if not df.empty and len(df) > 1:
-            # 3. Sort Oldest -> Newest (Required for Diff calculation)
+            # sort oldest -> newest (required for diff calculation)
             df = df.sort_values('timestamp', ascending=True)
 
-            # 4. CRITICAL: Calculate Speed (Delta)
-            # This converts "Total Cumulative Bytes" into "Bytes per Interval"
+            # critical: calculate speed (delta)
+            # this converts "total cumulative bytes" into "bytes per interval"
             df['bytes_sent'] = df['tx_bytes'].diff().fillna(0)
 
-            # Remove negative spikes (which happen if switch resets counters)
+            # remove negative spikes (which happen if switch resets counters)
             df['bytes_sent'] = df['bytes_sent'].clip(lower=0)
 
-            # Return only the relevant columns
+            # return only the relevant columns
             return df[['bytes_sent', 'timestamp']]
 
-        return pd.DataFrame()  # Return empty if no data or not enough data
+        return pd.DataFrame()  # return empty if no data or not enough data
 
-    # --- CLEANUP ---
+    # cleanup
     def cleanup_old_data(self, days: int = 7):
         """Remove data older than specified days."""
         with self._get_connection() as conn:
@@ -227,7 +223,7 @@ class DatabaseManager:
             conn.execute('DELETE FROM flow_stats WHERE timestamp < datetime("now", ?)', (cutoff,))
             conn.commit()
     
-    # --- STATS ---
+    # stats
     def get_db_stats(self) -> Dict:
         """Get database statistics."""
         with self._get_connection() as conn:
@@ -254,7 +250,7 @@ class DatabaseManager:
 
             return [{'dpid': row['dpid'], 'port': row['port_no']} for row in rows]
 
-# --- Helper Function ---
+# helper function
 def get_db():
     """
     Returns a NEW DatabaseManager instance.
