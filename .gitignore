@@ -53,6 +53,7 @@ docs/previous/
 models/b4_classifier
 models/beforeA100
 models/previous
+models/seq2seqA100/new
 
 # Note: Current production models in models/ and models/seq2seqA100/ ARE tracked
 
@@ -65,8 +66,11 @@ tests/
 # Training visualizations and result plots (generated during training)
 visuals/
 
-# Reference repositories used during development
+# Reference during development
 reference/
+
+# Previous training scripts
+src/ml_models/training/previous/
 
 # -----------------------------------------------------------------------------
 # IDE AND EDITOR FILES
