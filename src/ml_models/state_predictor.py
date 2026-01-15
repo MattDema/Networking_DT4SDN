@@ -340,7 +340,7 @@ class StateManager:
         """Predict using current model."""
         if self.current_model is None:
             return None
-        return self.current_model.predict(historical_data, current_avg)
+        return self.current_model.predict(historical_data)
     
     @property
     def sequence_length(self) -> int:
