@@ -114,28 +114,94 @@ function populateLinkSelector(flows) {
 // --- 4. VISUALIZATION UPDATES ---
 function updateVisNetwork(topo, hosts) {
     if (!nodesDataSet || !edgesDataSet) return;
+
+    // Helper per tenere traccia di cosa abbiamo già aggiunto
+    // per evitare duplicati o sovrascritture inutili
+    const existingEdges = edgesDataSet.getIds();
     const newNodes = [];
     const newEdges = [];
 
+    // 1. Aggiungi Switch
     if (topo.switches) {
-        topo.switches.forEach(sw => newNodes.push({
-            id: sw, label: sw.toUpperCase(), group: 'switch',
-            image: 'https://img.icons8.com/ios-filled/50/000000/switch.png', shape: 'image'
-        }));
-    }
-    if (hosts) {
-        hosts.forEach(h => {
-            newNodes.push({ id: h.mac, label: 'Host', group: 'host', shape: 'dot', color: '#e74c3c' });
-            newEdges.push({ id: `link_${h.mac}_s${h.dpid}`, from: h.mac, to: `s${h.dpid}` });
+        topo.switches.forEach(sw => {
+            // Aggiorna o Aggiungi nodo switch
+            newNodes.push({
+                id: sw, 
+                label: sw.toUpperCase(), 
+                group: 'switch',
+                image: 'https://img.icons8.com/ios-filled/50/000000/switch.png', 
+                shape: 'image'
+            });
         });
     }
+
+    // 2. Gestisci Host
+    // Se la topologia ha esplicitamente gli host definiti in 'topo.hosts', usiamo quelli (spesso hanno nomi migliori come h1, h2)
+    // Altrimenti usiamo la lista 'hosts' che viene dai flussi (solo MAC address)
+    let hostList = topo.hosts || [];
+    
+    // Se la topologia ci dà gli host come stringhe (nomi), li usiamo
+    if (hostList.length > 0 && typeof hostList[0] === 'string') {
+        hostList.forEach(hName => {
+            newNodes.push({ 
+                id: hName, 
+                label: hName.toUpperCase(), 
+                group: 'host', 
+                shape: 'dot', 
+                color: '#e74c3c' 
+            });
+        });
+    } 
+    // Fallback: Se la topologia NON ha host, usiamo quelli scoperti dai flussi (MAC address)
+    else if (hosts && hosts.length > 0) {
+         hosts.forEach(h => {
+            newNodes.push({ 
+                id: h.mac, 
+                label: 'Host', 
+                group: 'host', 
+                shape: 'dot', 
+                color: '#e74c3c' 
+            });
+             
+            // Aggiungi link host-switch SOLO se non stiamo usando i link della topologia statica
+            // Questo evita il problema "tutti attaccati a s1" se s1 vede tutti i mac
+            // Ma è rischioso. Meglio affidarsi a topo.links se esiste.
+        });
+    }
+
+    // 3. Gestisci Link (Switch-Switch e Host-Switch)
     if (topo.links) {
         topo.links.forEach(l => {
-            if(l.length>=2) newEdges.push({ id: `link_${l[0]}_${l[1]}`, from: l[0], to: l[1] });
+            if(l.length >= 2) {
+                const u = l[0];
+                const v = l[1];
+                const linkId = `link_${u}_${v}`;
+                const revLinkId = `link_${v}_${u}`;
+                
+                // Evita duplicati (A-B è uguale a B-A)
+                // Se non esiste né A-B né B-A, aggiungilo
+                if (!newEdges.some(e => e.id === linkId || e.id === revLinkId)) {
+                     newEdges.push({ id: linkId, from: u, to: v });
+                }
+            }
         });
+    } 
+    // Se NON abbiamo link dalla topologia (caso strano), proviamo a ricostruirli dai dati host grezzi
+    // Questo è il codice vecchio che causava problemi, lo eseguiamo solo come ultima spiaggia
+    else if (hosts) {
+         hosts.forEach(h => {
+             const linkId = `link_${h.mac}_s${h.dpid}`;
+             newEdges.push({ id: linkId, from: h.mac, to: `s${h.dpid}` });
+         });
     }
+
+    // Update differenziale per non far sfarfallare tutto
     nodesDataSet.update(newNodes);
-    edgesDataSet.update(newEdges);
+    
+    // Per i link, rimuovi quelli vecchi che non esistono più e aggiungi i nuovi
+    // (Approccio semplificato: clear e add, tanto sono pochi)
+    edgesDataSet.clear();
+    edgesDataSet.add(newEdges);
 }
 
 function updateFlowTable(allFlows) {
