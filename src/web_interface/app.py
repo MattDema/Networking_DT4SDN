@@ -8,7 +8,12 @@ import numpy as np
 from flask import Flask, render_template, jsonify, request
 from collections import defaultdict
 from scipy.stats import linregress
+import logging
+
 app = Flask(__name__)
+
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 # --- FIX IMPORT ---
 # Ensure 'src' directory is in python path to allow imports from sibling directories
@@ -48,7 +53,7 @@ seq2seq_predictor = seq2seq_manager
 
 # --- CONFIGURATION ---
 # Changed default from '192.168.2.4' back to '127.0.0.1' for local dev
-PT_IP = os.getenv('PT_IP', '127.0.0.1')
+PT_IP = os.getenv('PT_IP', '192.168.2.4')
 RYU_API_URL = f"http://{PT_IP}:8080"
 
 
@@ -113,12 +118,12 @@ def get_topology_info():
     """Fetch the high-level topology type from Ryu."""
     try:
         url = f"{RYU_API_URL}/topology/metadata"
-        print(f"📡 Requesting Topology from: {url} ...") # Print ripristinato
+        #print(f"📡 Requesting Topology from: {url} ...") # Print ripristinato
         
         resp = requests.get(url, timeout=2)
         if resp.status_code == 200:
             data = resp.json()
-            print(f"✅ Topology Received: type={data.get('type')}") # Print ripristinato
+           # print(f"✅ Topology Received: type={data.get('type')}") # Print ripristinato
             return data
         else:
             print(f"❌ Topology Error: Status {resp.status_code}")
