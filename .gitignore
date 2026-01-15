@@ -22,7 +22,6 @@ data/logs/*
 docs/previous/
 
 # Models
-models/
 
 # Tests
 tests/
