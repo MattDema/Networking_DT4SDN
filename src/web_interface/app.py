@@ -49,26 +49,39 @@ except Exception as e:
 
 # Initialize seq2seq predictor (for graph visualization)
 seq2seq_predictor = None
+available_classifiers = {}
+available_seq2seq = {}
+current_model_name = 'mixed'
+
 try:
-    # Try A100 models first, then regular models folder
+    # Find all classifier models
+    classifier_pattern = os.path.join(models_dir, '*_classifier_3050.pt')
+    for f in glob.glob(classifier_pattern):
+        name = os.path.basename(f).replace('_classifier_3050.pt', '')
+        available_classifiers[name] = f
+    print(f"Found classifiers: {list(available_classifiers.keys())}")
+    
+    # Find all seq2seq models (try A100 folder first)
     seq2seq_dir = os.path.join(models_dir, 'seq2seqA100')
     if not os.path.exists(seq2seq_dir):
         seq2seq_dir = models_dir
     
     seq_pattern = os.path.join(seq2seq_dir, '*_seq2seq_3050.pt')
-    seq_files = glob.glob(seq_pattern)
+    for f in glob.glob(seq_pattern):
+        name = os.path.basename(f).replace('_seq2seq_3050.pt', '')
+        available_seq2seq[name] = f
+    print(f"Found seq2seq: {list(available_seq2seq.keys())}")
     
-    print(f"Looking for seq2seq models in: {seq2seq_dir}")
-    print(f"Found: {seq_files}")
-    
-    if seq_files:
-        # Prefer mixed model
-        mixed_seq = [f for f in seq_files if 'mixed' in f]
-        seq_path = mixed_seq[0] if mixed_seq else seq_files[0]
-        seq2seq_predictor = Seq2SeqPredictor(seq_path)
-        print(f"✓ Seq2SeqPredictor loaded: {seq_path}")
-    else:
-        print(f"⚠️ No seq2seq models found")
+    # Load default seq2seq (mixed)
+    if 'mixed' in available_seq2seq:
+        seq2seq_predictor = Seq2SeqPredictor(available_seq2seq['mixed'])
+        print(f"✓ Seq2SeqPredictor loaded: mixed")
+    elif available_seq2seq:
+        first_key = list(available_seq2seq.keys())[0]
+        seq2seq_predictor = Seq2SeqPredictor(available_seq2seq[first_key])
+        current_model_name = first_key
+        print(f"✓ Seq2SeqPredictor loaded: {first_key}")
+        
 except Exception as e:
     print(f"⚠️ Could not load Seq2SeqPredictor: {e}")
     import traceback
@@ -623,7 +636,20 @@ DASHBOARD_HTML = """
 
         <!-- 📈 REAL-TIME PREDICTION GRAPH -->
         <div class="card full-width">
-            <h3>📈 Traffic Prediction Graph (Physical vs Digital Twin)</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0;">📈 Traffic Prediction Graph (Physical vs Digital Twin)</h3>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="font-size: 12px; color: var(--text-secondary);">Model:</label>
+                    <select id="model-selector" onchange="switchModel(this.value)" 
+                            style="padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 12px; cursor: pointer;">
+                        <option value="normal">Normal</option>
+                        <option value="burst">Burst</option>
+                        <option value="congestion">Congestion</option>
+                        <option value="ddos">DDoS</option>
+                        <option value="mixed" selected>Mixed</option>
+                    </select>
+                </div>
+            </div>
             <div style="position: relative; height: 350px; width: 100%;">
                 <canvas id="predictionChart"></canvas>
             </div>
@@ -667,6 +693,34 @@ DASHBOARD_HTML = """
             } else {
                 icon.textContent = '🌙';
                 text.textContent = 'Dark';
+            }
+        }
+        
+        // ===== MODEL SWITCHING =====
+        async function switchModel(modelName) {
+            try {
+                const response = await fetch('/api/model/switch/' + modelName, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    console.log('Switched to:', modelName);
+                    // Show brief notification
+                    const status = document.getElementById('prediction-status');
+                    if (status) {
+                        const origText = status.textContent;
+                        status.textContent = '✓ Switched to ' + modelName;
+                        status.style.background = '#27ae60';
+                        setTimeout(() => {
+                            status.textContent = origText;
+                            status.style.background = '';
+                        }, 2000);
+                    }
+                } else {
+                    console.error('Switch failed:', data.error);
+                }
+            } catch (err) {
+                console.error('Switch error:', err);
             }
         }
         
@@ -1147,6 +1201,53 @@ def api_prediction():
             'estimated_bandwidth': 0,
             'color': '#666666'
         })
+
+
+@app.route('/api/models')
+def api_models():
+    """List available models and current selection."""
+    return jsonify({
+        'classifiers': list(available_classifiers.keys()),
+        'seq2seq': list(available_seq2seq.keys()),
+        'current': current_model_name,
+        'classifier_loaded': state_predictor is not None,
+        'seq2seq_loaded': seq2seq_predictor is not None
+    })
+
+
+@app.route('/api/model/switch/<model_name>', methods=['POST'])
+def api_switch_model(model_name):
+    """Switch to a different model (normal, burst, congestion, ddos, mixed)."""
+    global state_predictor, seq2seq_predictor, current_model_name
+    
+    model_name = model_name.lower()
+    
+    try:
+        # Switch classifier
+        if model_name in available_classifiers:
+            from ml_models.state_predictor import StatePredictor
+            state_predictor = StatePredictor(available_classifiers[model_name])
+            print(f"✓ Switched classifier to: {model_name}")
+        
+        # Switch seq2seq
+        if model_name in available_seq2seq:
+            from ml_models.seq2seq_predictor import Seq2SeqPredictor
+            seq2seq_predictor = Seq2SeqPredictor(available_seq2seq[model_name])
+            print(f"✓ Switched seq2seq to: {model_name}")
+        
+        current_model_name = model_name
+        
+        return jsonify({
+            'success': True,
+            'model': model_name,
+            'message': f'Switched to {model_name} model'
+        })
+    except Exception as e:
+        print(f"Model switch error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 def start_web_server(host='0.0.0.0', port=5000):

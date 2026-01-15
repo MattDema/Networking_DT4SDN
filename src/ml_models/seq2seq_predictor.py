@@ -199,6 +199,10 @@ class Seq2SeqPredictor:
         elif len(historical_data) > self.sequence_length:
             historical_data = historical_data[-self.sequence_length:]
         
+        # Calculate input traffic level for scaling
+        input_mean = float(np.mean(historical_data))
+        input_max = float(np.max(historical_data))
+        
         # Normalize
         if self.scaler is not None:
             data_scaled = self.scaler.transform(historical_data.astype(np.float32))
@@ -224,8 +228,20 @@ class Seq2SeqPredictor:
         if self.scaler is not None:
             predictions = self.scaler.inverse_transform(predictions)
         
+        predictions = predictions.flatten()
+        
+        # CRITICAL FIX: Scale predictions based on input traffic level
+        # If input is near zero, predictions should also be near zero
+        LOW_TRAFFIC_THRESHOLD = 10000  # 10 KB/s
+        
+        if input_mean < LOW_TRAFFIC_THRESHOLD:
+            # Scale factor: how much of normal traffic we're seeing
+            scale_factor = max(0.01, input_mean / LOW_TRAFFIC_THRESHOLD)
+            # Blend predictions toward input level
+            predictions = predictions * scale_factor + (1 - scale_factor) * input_mean
+        
         # Clip to non-negative
-        predictions = np.clip(predictions.flatten(), 0, None)
+        predictions = np.clip(predictions, 0, None)
         
         return predictions
     
