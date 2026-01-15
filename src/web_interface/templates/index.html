@@ -6,12 +6,27 @@
     <!-- LIVE LIBRARY MUST LOAD FIRST -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script> 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body data-theme="light">
     <div class="header">
         <h1>🌐 Digital Twin Orchestrator</h1>
         <div class="header-controls">
             <div class="live-indicator"><span class="live-dot"></span><span>LIVE</span></div>
+            
+            <!-- NUOVO: Model Selector -->
+            <div class="model-selector">
+                <label for="scenario-select">Model:</label>
+                <select id="scenario-select" onchange="switchModel(this.value)">
+                    <option value="mixed">Mixed (All)</option>
+                    <option value="normal">Normal</option>
+                    <option value="burst">Burst</option>
+                    <option value="congestion">Congestion</option>
+                    <option value="ddos">DDoS</option>
+                </select>
+                <span id="model-status"></span>
+            </div>
+
             <button class="theme-toggle" onclick="toggleTheme()">
                 <span class="theme-icon" id="theme-icon">🌙</span><span id="theme-text">Dark</span>
             </button>
@@ -93,6 +108,25 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- NUOVO: Traffic Prediction Graph -->
+            <div class="card full-width">
+                <h3>📈 Traffic Prediction Graph (Physical vs Digital Twin)</h3>
+                <div style="position: relative; height: 350px; width: 100%;">
+                    <canvas id="predictionChart"></canvas>
+                </div>
+                <div class="chart-legend">
+                    <div>
+                        <span class="legend-line physical"></span>
+                        <span>Physical (Actual)</span>
+                        <span class="legend-line digital"></span>
+                        <span>Digital (Predicted)</span>
+                    </div>
+                    <div id="prediction-status" class="status-badge">
+                        Loading...
+                    </div>
                 </div>
             </div>
         </div>
