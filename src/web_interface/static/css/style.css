@@ -112,22 +112,55 @@ h1 {
 /* New Layout Classes */
 .main-layout {
     display: grid;
-    grid-template-columns: 1fr 2fr;
+    grid-template-columns: 280px 1fr; /* Fixed sidebar, adaptive content */
     gap: 20px;
     margin-bottom: 20px;
+    align-items: start;
 }
 
 .sidebar {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    flex: 0 0 250px; /* Force sidebar width */
+    position: sticky;
+    top: 20px;
+    min-width: 0;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
 }
 
 .main-content {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    min-width: 0;
+}
+
+/* Chart Styles */
+.legend-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.9em;
+}
+
+.legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.legend-dot.physical { background-color: rgba(54, 162, 235, 1); }
+.legend-dot.digital { background-color: rgba(255, 99, 132, 1); }
+
+/* Make network chart grow */
+#mynetwork {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
+    background: var(--bg-primary);
 }
 
 .top-row {

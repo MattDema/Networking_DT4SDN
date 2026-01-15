@@ -56,37 +56,35 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Removed 'flex: 1' to prevent stretching white space
-            <div class="card" style="display: flex; flex-direction: column;">
-                <h3>🤖 AI Forecast</h3>
-                <div class="prediction-grid">
-                    {% if predictions %}
-                        {% for key, pred in predictions.items() %}
-                        <div class="pred-card {{ pred.level }}">
-                            <span><b>{{ key }}</b></span>
-                            <span style="font-weight: bold;">{{ pred.value }}</span>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <p style="font-size: 0.8em; color: gray; text-align: center; margin-top: 20px;">Waiting for traffic...</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div> -->
-
+        </div>
+        
         <!-- Main Content -->
         <div class="main-content">
-            <!-- Topology -->
-            <div class="card" style="display: flex; flex-direction: column; min-height: 540px;"> <!-- Force min-height -->
-                <div style="margin-bottom: 10px;">
+            <!-- 1. LIVE TOPOLOGY (Wide) -->
+            <div class="card" style="display: flex; flex-direction: column; height: 500px;">
+                <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
                     <h3>🗺️ Live Topology</h3>
+                    <span style="font-size: 0.8em; color: gray;">Drag nodes to rearrange</span>
                 </div>
-                <!-- REMOVED BUTTON -->
-                <div id="mynetwork"></div>
+                <div id="mynetwork" style="flex: 1; border: 1px solid #eee; border-radius: 4px;"></div>
             </div>
 
-            <!-- Flows -->
+            <!-- 2. PREDICTION CHART (Wide) -->
+            <div class="card full-width">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3>📈 AI Traffic Forecast</h3>
+                    <div class="legend-container">
+                        <span class="legend-dot physical"></span> Actual
+                        <span class="legend-dot digital"></span> Predicted
+                        <span id="prediction-status" class="status-badge">Loading...</span>
+                    </div>
+                </div>
+                <div style="position: relative; height: 300px; width: 100%;">
+                    <canvas id="predictionChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 3. PACKET FLOWS -->
             <div class="card">
                 <h3>🌊 Packet Flows</h3>
                 <div class="table-container">
