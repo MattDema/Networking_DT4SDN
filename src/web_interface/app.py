@@ -180,7 +180,7 @@ def index():
 
                 predictions[key] = {
                     'dpid': row['dpid'],     # Store dpid separately for grouping
-                    'port': row['port'],
+                    'port': row['port_no'],
                     'value': f"{kb_val:.1f} KB",
                     'timestamp': row['timestamp'],
                     'level': level,
