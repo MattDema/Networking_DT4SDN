@@ -48,6 +48,12 @@ body {
     margin-bottom: 20px;
 }
 
+.main-logo {
+    height: 48px;
+    border-radius: 6px;
+    object-fit: contain;
+}
+
 h1 { 
     color: var(--accent); 
     margin: 0;
@@ -127,6 +133,35 @@ h1 {
     min-width: 0;
     max-height: calc(100vh - 40px);
     overflow-y: auto;
+}
+
+.logos-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    margin-top: auto; /* Push to bottom if space permits */
+    padding: 20px;
+    background: var(--bg-card); /* Optional: distinct background */
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.sidebar-logo {
+    max-width: 180px;
+    max-height: 80px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    /* Optional: make them blend better in dark mode if they have white bg */
+    mix-blend-mode: multiply; 
+}
+
+[data-theme="dark"] .sidebar-logo {
+    mix-blend-mode: normal;
+    background: white; /* Ensure visibility in dark mode if transparent/black logos */
+    padding: 5px;
+    border-radius: 4px;
 }
 
 .main-content {

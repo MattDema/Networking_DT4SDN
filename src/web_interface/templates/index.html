@@ -10,7 +10,10 @@
 </head>
 <body data-theme="light">
     <div class="header">
-        <h1>🌐 Digital Twin Orchestrator</h1>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="{{ url_for('static', filename='img/28DIGITAL.jpg') }}" alt="Logo" class="main-logo">
+            <h1>Digital Twin Orchestrator</h1>
+        </div>
         <div class="header-controls">
             <div class="live-indicator"><span class="live-dot"></span><span>LIVE</span></div>
             
@@ -37,7 +40,7 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="card">
-                <h3>📡 System Status</h3>
+                <h3>System Status</h3>
                 <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.9em;">
                     <div><span style="color: var(--text-secondary);">Topo:</span> <strong>{{ topo_info.type | title }}</strong></div>
                     <div><span style="color: var(--text-secondary);">PT IP:</span> <strong>{{ pt_ip }}</strong></div>
@@ -56,6 +59,12 @@
                     </div>
                 </div>
             </div>
+
+            <!-- University Logos -->
+            <div class="logos-container">
+                <img src="{{ url_for('static', filename='img/UniTrento.jpg') }}" alt="UniTrento" class="sidebar-logo">
+                <img src="{{ url_for('static', filename='img/logo_disi.png') }}" alt="DISI" class="sidebar-logo">
+            </div>
         </div>
         
         <!-- Main Content -->
@@ -63,7 +72,7 @@
             <!-- 1. LIVE TOPOLOGY (Wide) -->
             <div class="card" style="display: flex; flex-direction: column;">
                 <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <h3>🗺️ Live Topology</h3>
+                    <h3>Live Topology</h3>
                     <span style="font-size: 0.8em; color: gray;">Drag nodes to rearrange</span>
                 </div>
                 <!-- CSS defines height for #mynetwork -->
@@ -73,7 +82,7 @@
             <!-- 2. PREDICTION CHART (Wide) -->
             <div class="card full-width">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h3>📈 AI Traffic Forecast</h3>
+                    <h3>AI Traffic Forecast</h3>
                     <div class="legend-container">
                         <span class="legend-dot physical"></span> Actual
                         <span class="legend-dot digital"></span> Predicted
