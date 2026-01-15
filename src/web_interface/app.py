@@ -19,7 +19,7 @@ from database.db_manager import get_db
 
 # --- CONFIGURATION ---
 # We define these here because the Dashboard needs them to fetch live data
-PT_IP = os.getenv('PT_IP', '127.0.0.1')
+PT_IP = os.getenv('PT_IP', '192.168.2.4')
 RYU_API_URL = f"http://{PT_IP}:8080"
 
 

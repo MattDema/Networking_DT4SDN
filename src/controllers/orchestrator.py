@@ -165,7 +165,7 @@ def run_prediction_loop():
             active_links = db.get_active_links()
 
             if not active_links:
-                # print("[Predictor] No active links...")
+                print("[Predictor] No active links...")
                 pass
 
             for link in active_links:
