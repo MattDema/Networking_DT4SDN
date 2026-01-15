@@ -137,9 +137,9 @@ class DatabaseManager:
         with self._get_connection() as conn:
             conn.execute('''
                 INSERT INTO predictions 
-                (dpid, port, predicted_packets, predicted_bytes, prediction_horizon)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (dpid, port, predicted_packets, predicted_bytes, horizon))
+                (dpid, port_no, predicted_bytes, prediction_horizon)
+                VALUES (?, ?, ?, ?)
+            ''', (dpid, port, predicted_bytes, horizon))
             conn.commit()
     
     def update_prediction_actual(self, prediction_id: int,
