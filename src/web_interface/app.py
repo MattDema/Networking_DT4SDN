@@ -47,7 +47,8 @@ state_predictor = state_manager
 seq2seq_predictor = seq2seq_manager
 
 # --- CONFIGURATION ---
-PT_IP = os.getenv('PT_IP', '192.168.2.4')
+# Changed default from '192.168.2.4' back to '127.0.0.1' for local dev
+PT_IP = os.getenv('PT_IP', '127.0.0.1')
 RYU_API_URL = f"http://{PT_IP}:8080"
 
 
@@ -112,12 +113,20 @@ def get_topology_info():
     """Fetch the high-level topology type from Ryu."""
     try:
         url = f"{RYU_API_URL}/topology/metadata"
+        print(f"📡 Requesting Topology from: {url} ...") # Print ripristinato
+        
         resp = requests.get(url, timeout=2)
         if resp.status_code == 200:
-            return resp.json()
-    except Exception as e:
-        pass
+            data = resp.json()
+            print(f"✅ Topology Received: type={data.get('type')}") # Print ripristinato
+            return data
+        else:
+            print(f"❌ Topology Error: Status {resp.status_code}")
 
+    except Exception as e:
+        print(f"⚠️ Topology Connection Exception: {e}")
+        pass
+    
     return {"type": "Unknown", "switches": [], "links": []}
 
 
@@ -214,6 +223,11 @@ def index():
         db_stats=db_stats_data,
         predictions=predictions
     )
+
+# AGGIUNTO: Endpoint API mancante
+@app.route('/api/topology')
+def api_topology():
+    return jsonify(get_topology_info())
 
 
 # --- API ENDPOINTS FOR GRAPH & MODEL SELECTION ---
