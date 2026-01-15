@@ -18,72 +18,32 @@ if src_dir not in sys.path:
 # Now we can import directly from 'database' (since 'src' is in path)
 from database.db_manager import get_db
 from ml_models.state_predictor import StatePredictor
-from ml_models.seq2seq_predictor import Seq2SeqPredictor
 import numpy as np
 
-# Get project root
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-models_dir = os.path.join(project_root, 'models')
-
-# Initialize state predictor (classifier)
+# Initialize state predictor (loaded once at startup)
 state_predictor = None
 try:
     import glob
+    # Get project root (two levels up from this file: web_interface -> src -> project)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    models_dir = os.path.join(project_root, 'models')
+    
     model_pattern = os.path.join(models_dir, '*_classifier_3050.pt')
     model_files = glob.glob(model_pattern)
     
-    print(f"Looking for classifier models in: {models_dir}")
-    print(f"Found: {model_files}")
+    print(f"Looking for models in: {models_dir}")
+    print(f"Found models: {model_files}")
     
     if model_files:
+        # Use mixed model as default (trained on all patterns)
         mixed_model = [f for f in model_files if 'mixed' in f]
         model_path = mixed_model[0] if mixed_model else model_files[0]
         state_predictor = StatePredictor(model_path)
         print(f"✓ StatePredictor loaded: {model_path}")
     else:
-        print(f"⚠️ No classifier models found")
+        print(f"⚠️ No classifier models found in {models_dir}")
 except Exception as e:
     print(f"⚠️ Could not load StatePredictor: {e}")
-    import traceback
-    traceback.print_exc()
-
-# Initialize seq2seq predictor (for graph visualization)
-seq2seq_predictor = None
-available_classifiers = {}
-available_seq2seq = {}
-current_model_name = 'mixed'
-
-try:
-    # Find all classifier models
-    classifier_pattern = os.path.join(models_dir, '*_classifier_3050.pt')
-    for f in glob.glob(classifier_pattern):
-        name = os.path.basename(f).replace('_classifier_3050.pt', '')
-        available_classifiers[name] = f
-    print(f"Found classifiers: {list(available_classifiers.keys())}")
-    
-    # Find all seq2seq models (try A100 folder first)
-    seq2seq_dir = os.path.join(models_dir, 'seq2seqA100')
-    if not os.path.exists(seq2seq_dir):
-        seq2seq_dir = models_dir
-    
-    seq_pattern = os.path.join(seq2seq_dir, '*_seq2seq_3050.pt')
-    for f in glob.glob(seq_pattern):
-        name = os.path.basename(f).replace('_seq2seq_3050.pt', '')
-        available_seq2seq[name] = f
-    print(f"Found seq2seq: {list(available_seq2seq.keys())}")
-    
-    # Load default seq2seq (mixed)
-    if 'mixed' in available_seq2seq:
-        seq2seq_predictor = Seq2SeqPredictor(available_seq2seq['mixed'])
-        print(f"✓ Seq2SeqPredictor loaded: mixed")
-    elif available_seq2seq:
-        first_key = list(available_seq2seq.keys())[0]
-        seq2seq_predictor = Seq2SeqPredictor(available_seq2seq[first_key])
-        current_model_name = first_key
-        print(f"✓ Seq2SeqPredictor loaded: {first_key}")
-        
-except Exception as e:
-    print(f"⚠️ Could not load Seq2SeqPredictor: {e}")
     import traceback
     traceback.print_exc()
 
@@ -636,20 +596,7 @@ DASHBOARD_HTML = """
 
         <!-- 📈 REAL-TIME PREDICTION GRAPH -->
         <div class="card full-width">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h3 style="margin: 0;">📈 Traffic Prediction Graph (Physical vs Digital Twin)</h3>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <label style="font-size: 12px; color: var(--text-secondary);">Model:</label>
-                    <select id="model-selector" onchange="switchModel(this.value)" 
-                            style="padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 12px; cursor: pointer;">
-                        <option value="normal">Normal</option>
-                        <option value="burst">Burst</option>
-                        <option value="congestion">Congestion</option>
-                        <option value="ddos">DDoS</option>
-                        <option value="mixed" selected>Mixed</option>
-                    </select>
-                </div>
-            </div>
+            <h3>📈 Traffic Prediction Graph (Physical vs Digital Twin)</h3>
             <div style="position: relative; height: 350px; width: 100%;">
                 <canvas id="predictionChart"></canvas>
             </div>
@@ -693,34 +640,6 @@ DASHBOARD_HTML = """
             } else {
                 icon.textContent = '🌙';
                 text.textContent = 'Dark';
-            }
-        }
-        
-        // ===== MODEL SWITCHING =====
-        async function switchModel(modelName) {
-            try {
-                const response = await fetch('/api/model/switch/' + modelName, {
-                    method: 'POST'
-                });
-                const data = await response.json();
-                if (data.success) {
-                    console.log('Switched to:', modelName);
-                    // Show brief notification
-                    const status = document.getElementById('prediction-status');
-                    if (status) {
-                        const origText = status.textContent;
-                        status.textContent = '✓ Switched to ' + modelName;
-                        status.style.background = '#27ae60';
-                        setTimeout(() => {
-                            status.textContent = origText;
-                            status.style.background = '';
-                        }, 2000);
-                    }
-                } else {
-                    console.error('Switch failed:', data.error);
-                }
-            } catch (err) {
-                console.error('Switch error:', err);
             }
         }
         
@@ -843,32 +762,28 @@ DASHBOARD_HTML = """
                     actualData.push(null); // No actual data for future
                 }
                 
-                // Build prediction data array
-                // Use ACTUAL seq2seq predictions if available!
+                // Build prediction data array - HONEST representation
+                // The model predicts a STATE, not exact values
+                // Show a smooth transition from current to predicted state
                 const predData = [];
                 for (let i = 0; i < historyPoints; i++) {
                     predData.push(null);
                 }
                 
                 const currentVal = actualHistory[actualHistory.length - 1] || 0;
+                const targetVal = predictedKB;
+                
+                // If current is near zero and target is also low (NORMAL), stay flat
+                // Otherwise, show gradual transition to predicted state
                 predData.push(currentVal); // NOW point
                 
-                // Check if we have actual seq2seq predictions
-                if (data.future_values && Array.isArray(data.future_values) && data.future_values.length > 0) {
-                    // Use REAL seq2seq predictions (convert to KB/s)
-                    for (let i = 0; i < Math.min(predictionPoints, data.future_values.length); i++) {
-                        predData.push(data.future_values[i] / 1000);
-                    }
-                    console.log('Using seq2seq predictions');
-                } else {
-                    // Fallback: smooth transition to estimated bandwidth
-                    const targetVal = predictedKB;
-                    for (let i = 1; i <= predictionPoints; i++) {
-                        const progress = i / predictionPoints;
-                        const eased = 1 - Math.pow(1 - progress, 2);
-                        const value = currentVal + (targetVal - currentVal) * eased;
-                        predData.push(Math.max(0, value));
-                    }
+                for (let i = 1; i <= predictionPoints; i++) {
+                    // Smooth easing from current toward predicted state
+                    const progress = i / predictionPoints;
+                    // Use ease-out curve for smooth transition
+                    const eased = 1 - Math.pow(1 - progress, 2);
+                    const value = currentVal + (targetVal - currentVal) * eased;
+                    predData.push(Math.max(0, value));
                 }
                 
                 // Update chart data
@@ -1147,34 +1062,22 @@ def api_prediction():
                   f"Est BW: {result['estimated_bandwidth']:,.0f} B/s")
             
             result['current_traffic'] = current_traffic
-            result['avg_traffic'] = avg_traffic
+            result['avg_traffic'] = avg_traffic  # Add avg for display
             result['timestamp'] = time.time()
             result['model_used'] = True
-            
-            # Use seq2seq for actual future values (for graph visualization)
-            if seq2seq_predictor:
-                try:
-                    future_values = seq2seq_predictor.predict(historical_data)
-                    result['future_values'] = future_values.tolist()
-                    print(f"[SEQ2SEQ] Generated {len(future_values)} future values")
-                except Exception as e:
-                    print(f"[SEQ2SEQ] Error: {e}")
-                    result['future_values'] = None
-            else:
-                result['future_values'] = None
-            
             return jsonify(result)
         else:
             reason = "no predictor" if not state_predictor else f"only {len(bytes_per_second)} samples"
             print(f"[FALLBACK] Using threshold-based: {reason}")
             # Fallback: simple threshold-based estimation
-            if avg_traffic < 100000:
+            # These thresholds are for bytes/second
+            if avg_traffic < 100000:  # < 100 KB/s
                 state, color = 'NORMAL', '#27ae60'
-            elif avg_traffic < 500000:
+            elif avg_traffic < 500000:  # < 500 KB/s
                 state, color = 'ELEVATED', '#f39c12'
-            elif avg_traffic < 1000000:
+            elif avg_traffic < 1000000:  # < 1 MB/s
                 state, color = 'HIGH', '#e67e22'
-            else:
+            else:  # > 1 MB/s
                 state, color = 'CRITICAL', '#e74c3c'
             
             return jsonify({
@@ -1186,8 +1089,7 @@ def api_prediction():
                 'color': color,
                 'prediction_horizon': 60,
                 'timestamp': time.time(),
-                'model_loaded': state_predictor is not None,
-                'future_values': None
+                'model_loaded': state_predictor is not None
             })
             
     except Exception as e:
@@ -1201,53 +1103,6 @@ def api_prediction():
             'estimated_bandwidth': 0,
             'color': '#666666'
         })
-
-
-@app.route('/api/models')
-def api_models():
-    """List available models and current selection."""
-    return jsonify({
-        'classifiers': list(available_classifiers.keys()),
-        'seq2seq': list(available_seq2seq.keys()),
-        'current': current_model_name,
-        'classifier_loaded': state_predictor is not None,
-        'seq2seq_loaded': seq2seq_predictor is not None
-    })
-
-
-@app.route('/api/model/switch/<model_name>', methods=['POST'])
-def api_switch_model(model_name):
-    """Switch to a different model (normal, burst, congestion, ddos, mixed)."""
-    global state_predictor, seq2seq_predictor, current_model_name
-    
-    model_name = model_name.lower()
-    
-    try:
-        # Switch classifier
-        if model_name in available_classifiers:
-            from ml_models.state_predictor import StatePredictor
-            state_predictor = StatePredictor(available_classifiers[model_name])
-            print(f"✓ Switched classifier to: {model_name}")
-        
-        # Switch seq2seq
-        if model_name in available_seq2seq:
-            from ml_models.seq2seq_predictor import Seq2SeqPredictor
-            seq2seq_predictor = Seq2SeqPredictor(available_seq2seq[model_name])
-            print(f"✓ Switched seq2seq to: {model_name}")
-        
-        current_model_name = model_name
-        
-        return jsonify({
-            'success': True,
-            'model': model_name,
-            'message': f'Switched to {model_name} model'
-        })
-    except Exception as e:
-        print(f"Model switch error: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 
 def start_web_server(host='0.0.0.0', port=5000):
