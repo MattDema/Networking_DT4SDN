@@ -1,14 +1,11 @@
 # Digital Twin for Software Defined Networks (DT4SDN)
 
 ---
+<div align="center">
 
-![License](https://img.shields.io/github/license/MattDema/Networking_DT4SDN?style=for-the-badge&logoSize=auto&labelColor=blue&color=black)  
-![Version](https://img.shields.io/badge/v2.5-RELEASE?style=for-the-badge&label=DT4SDN&labelColor=cyan&color=black)  
-![Stars](https://img.shields.io/github/stars/MattDema/Networking_DT4SDN?style=for-the-badge&logo=github&logoColor=black&logoSize=auto&labelColor=gold&color=black)  
-![Contributors](https://img.shields.io/github/contributors/MattDema/Networking_DT4SDN?style=for-the-badge&logo=github&logoColor=white&logoSize=auto&label=contributors&labelColor=green&color=black)  
-![Issues](https://img.shields.io/github/issues/MattDema/Networking_DT4SDN?style=for-the-badge&logoSize=auto&label=Issues&labelColor=red&color=black)  
-![Repo Size](https://img.shields.io/github/repo-size/MattDema/Networking_DT4SDN?style=for-the-badge&labelColor=purple&color=black)  
+![License](https://img.shields.io/github/license/MattDema/Networking_DT4SDN?style=for-the-badge&logoSize=auto&labelColor=blue&color=black)  ![Version](https://img.shields.io/badge/v2.5-RELEASE?style=for-the-badge&label=DT4SDN&labelColor=cyan&color=black)  ![Stars](https://img.shields.io/github/stars/MattDema/Networking_DT4SDN?style=for-the-badge&logo=github&logoColor=black&logoSize=auto&labelColor=gold&color=black)  ![Contributors](https://img.shields.io/github/contributors/MattDema/Networking_DT4SDN?style=for-the-badge&logo=github&logoColor=white&logoSize=auto&label=contributors&labelColor=green&color=black)  ![Issues](https://img.shields.io/github/issues/MattDema/Networking_DT4SDN?style=for-the-badge&logoSize=auto&label=Issues&labelColor=red&color=black)  ![Repo Size](https://img.shields.io/github/repo-size/MattDema/Networking_DT4SDN?style=for-the-badge&labelColor=purple&color=black)  
 
+</div>
 ---
 
 ***Prof. <a href="https://webapps.unitn.it/du/it/Persona/PER0003067/Didattica">Granelli Fabrizio</a>***
@@ -390,10 +387,10 @@ Networking_DT4SDN/
 
 <div style="display: flex; justify-content: space-between; align-items: center;">
     <a href="https://www.granelli-lab.org/" target="_blank">
-        <img src="https://www.granelli-lab.org/theme/img/logo/logo.png" width="200px" alt="Granelli Lab Logo">
+        <img src="https://www.granelli-lab.org/theme/img/logo/logo.png" width="400px" alt="Granelli Lab Logo">
     </a>
     <a href="https://www.unitn.it/" target="_blank">
-        <img src="https://hicrest.unitn.it/wp-content/uploads/2022/07/marchio_unitrento_bianco_en-1024x318.png" width="200px" alt="UniTN Logo">
+        <img src="visuals/assets/UniTNLogo.png" width="400px" alt="UniTN Logo">
     </a>
 </div>
 
