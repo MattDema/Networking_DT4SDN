@@ -197,11 +197,13 @@ def run_prediction_loop():
         # Load all models defined in the MODELS config dictionary
         for scenario, paths in MODELS.items():
             model_path = paths['model']
+            scaler_path = paths['scaler']
             if os.path.exists(model_path):
                 print(f"   ✓ Loading {scenario} specialist...")
-                predictors[scenario] = StatePredictor(model_path)
+                predictors[scenario] = StatePredictor(model_path, scaler_path)
             else:
                 print(f"Warning: {scenario} model not found at {model_path}")
+                print(f"Warning: {scenario} model not found at {scaler_path}")
 
         if not predictors:
             print(" Error: No models loaded. Prediction loop will effectively do nothing.")
