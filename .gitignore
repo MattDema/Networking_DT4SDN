@@ -43,8 +43,8 @@ data/logs/*
 # -----------------------------------------------------------------------------
 # DOCUMENTATION
 # -----------------------------------------------------------------------------
-# Previous/archived documentation versions
-docs/previous/
+# Archived documentation versions
+docs/
 
 # -----------------------------------------------------------------------------
 # MACHINE LEARNING MODELS - ARCHIVED/DEVELOPMENT
@@ -56,7 +56,12 @@ models/previous
 models/seq2seqA100/new
 models/seq2seqA100/old
 
-# Note: Current production models in models/ and models/seq2seqA100/ ARE tracked
+# -----------------------------------------------------------------------------
+# TRAINING SCRIPTS
+# -----------------------------------------------------------------------------
+# Training scripts
+src/ml_models/training/
+
 
 # -----------------------------------------------------------------------------
 # DEVELOPMENT AND TESTING
