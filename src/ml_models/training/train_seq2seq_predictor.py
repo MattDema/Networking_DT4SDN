@@ -82,10 +82,10 @@ CONFIG = {
 }
 
 SCENARIOS = {
-    'normal': 'network_data_normal_50000_*.csv',
-    'burst': 'network_data_burst_50000_*.csv', 
-    'congestion': 'network_data_congestion_50000_*.csv',
-    'ddos': 'network_data_ddos_50000_*.csv',
+    #'normal': 'network_data_normal_50000_*.csv',
+    #'burst': 'network_data_burst_50000_*.csv', 
+    #'congestion': 'network_data_congestion_50000_*.csv',
+    #'ddos': 'network_data_ddos_50000_*.csv',
     'mixed': 'network_data_mixed_50000_*.csv'
 }
 

@@ -54,6 +54,7 @@ models/b4_classifier
 models/beforeA100
 models/previous
 models/seq2seqA100/new
+models/seq2seqA100/old
 
 # Note: Current production models in models/ and models/seq2seqA100/ ARE tracked
 
@@ -64,7 +65,10 @@ models/seq2seqA100/new
 tests/
 
 # Training visualizations and result plots (generated during training)
-visuals/
+visuals/training/previous/
+visuals/compare_all_scaler.py
+visuals/compare_all_models.py
+visuals/resave_models_compatible.py
 
 # Reference during development
 reference/
