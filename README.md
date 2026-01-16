@@ -264,7 +264,7 @@ h1 iperf -c 10.0.0.2 -u -b 500K -t 60
 
 **Burst Traffic:**
 ```bash
-h1 iperf -c 10.0.0.2 -u -b 8M -t 120 &
+h1 iperf -c 10.0.0.2 -u -b 25M -t 15 &
 ```
 
 **Congestion Simulation:**
@@ -387,10 +387,10 @@ Networking_DT4SDN/
 
 <div style="display: flex; justify-content: space-between; align-items: center;">
     <a href="https://www.granelli-lab.org/" target="_blank">
-        <img src="https://www.granelli-lab.org/theme/img/logo/logo.png" width="400px" alt="Granelli Lab Logo">
+        <img src="https://www.granelli-lab.org/theme/img/logo/logo.png" width="350px" alt="Granelli Lab Logo">
     </a>
     <a href="https://www.unitn.it/" target="_blank">
-        <img src="visuals/assets/UniTNLogo.png" width="400px" alt="UniTN Logo">
+        <img src="visuals/assets/UniTNLogo.png" width="350px" alt="UniTN Logo">
     </a>
 </div>
 
