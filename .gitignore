@@ -64,6 +64,20 @@ src/ml_models/training/
 
 
 # -----------------------------------------------------------------------------
+# OLD PREDICTOR
+# -----------------------------------------------------------------------------
+# Old traffic Predictor - packet size prediction
+src/ml_models/traffic_predictor.py
+
+
+# -----------------------------------------------------------------------------
+# OLD CONTROLLER
+# -----------------------------------------------------------------------------
+# Concept of digital twin controller - discarded due to orchestrator implementation
+src/controllers/digital_twin_controller.py
+
+
+# -----------------------------------------------------------------------------
 # DEVELOPMENT AND TESTING
 # -----------------------------------------------------------------------------
 # Test files and scripts (not needed in production)

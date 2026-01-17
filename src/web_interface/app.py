@@ -39,13 +39,13 @@ try:
     state_manager = StateManager(models_dir)
     print(f"✓ StateManager initialized with models: {state_manager.get_available_models()}")
 except Exception as e:
-    print(f"⚠️ Could not initialize StateManager: {e}")
+    print(f"ATTENTION!: Could not initialize StateManager: {e}")
 
 try:
     seq2seq_manager = Seq2SeqManager(models_dir)
     print(f"✓ Seq2SeqManager initialized with models: {seq2seq_manager.get_available_models()}")
 except Exception as e:
-    print(f"⚠️ Could not initialize Seq2SeqManager: {e}")
+    print(f"ATTENTION!: Could not initialize Seq2SeqManager: {e}")
 
 # Backwards compatibility aliases
 state_predictor = state_manager
@@ -118,18 +118,18 @@ def get_topology_info():
     """Fetch the high-level topology type from Ryu."""
     try:
         url = f"{RYU_API_URL}/topology/metadata"
-        #print(f"📡 Requesting Topology from: {url} ...") # Print ripristinato
+        #print(f" Requesting Topology from: {url} ...") # Print ripristinato
         
         resp = requests.get(url, timeout=2)
         if resp.status_code == 200:
             data = resp.json()
-           # print(f"✅ Topology Received: type={data.get('type')}") # Print ripristinato
+           # print(f" Topology Received: type={data.get('type')}") # Print ripristinato
             return data
         else:
-            print(f"❌ Topology Error: Status {resp.status_code}")
+            print(f"FAILED - Topology Error: Status {resp.status_code}")
 
     except Exception as e:
-        print(f"⚠️ Topology Connection Exception: {e}")
+        print(f"ATTENTION!: Topology Connection Exception: {e}")
         pass
     
     return {"type": "Unknown", "switches": [], "links": []}
@@ -258,7 +258,7 @@ def switch_model_scenario():
     data = request.json
     scenario = data.get('scenario', 'mixed')
 
-    print(f"🔄 Manual switch request to: {scenario}")
+    print(f"Manual switch request to: {scenario}")
 
     # 1. Switch Classifier Model
     cl_result = False
@@ -451,8 +451,8 @@ def get_prediction():
         # This returns 'NORMAL', 'DDOS' (Uppercase)
         detected_scenario_upper = determine_scenario(input_data)
 
-        # --- CRITICAL FIX: CONVERT TO LOWERCASE ---
-        # The file manager likely lists models as 'normal', 'ddos', etc.
+        # CONVERT TO LOWERCASE 
+        # The file manager lists models as 'normal', 'ddos', etc.
         target_model_key = detected_scenario_upper.lower()
         response['model_used'] = target_model_key
 
