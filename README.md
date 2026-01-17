@@ -17,7 +17,7 @@
 <img src="visuals/assets/LogoMain.jpg">
 </div>
 
-<div align="justify">
+
 
 <details>
 <summary><h2>Table of Contents</h2></summary>
@@ -414,4 +414,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-</div>
+
