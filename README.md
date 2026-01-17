@@ -388,14 +388,14 @@ Networking_DT4SDN/
 
 <div align="justify">
 
-<div style="display: flex; justify-content: space-between; align-items: center;">
-    <a href="https://www.granelli-lab.org/" target="_blank">
-        <img src="https://www.granelli-lab.org/theme/img/logo/logo.png" width="350px" alt="Granelli Lab Logo">
-    </a>
-    <a href="https://www.unitn.it/" target="_blank">
-        <img src="visuals/assets/UniTNLogo.png" width="350px" alt="UniTN Logo">
-    </a>
-</div>
+   <div style="display: flex; justify-content: space-between; align-items: center;">
+      <a href="https://www.granelli-lab.org/" target="_blank">
+         <img src="https://www.granelli-lab.org/theme/img/logo/logo.png" width="350px" alt="Granelli Lab Logo">
+      </a>
+      <a href="https://www.unitn.it/" target="_blank">
+         <img src="visuals/assets/UniTNLogo.png" width="350px" alt="UniTN Logo">
+      </a>
+   </div>
 
 </div>
 
