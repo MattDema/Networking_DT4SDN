@@ -85,8 +85,8 @@ tests/
 
 # Training visualizations and result plots (generated during training)
 visuals/training/previous/
-visuals/compare_all_scaler.py
-visuals/compare_all_models.py
+visuals/compare_all_scalers.py
+visuals/inspect_scaler.py
 visuals/resave_models_compatible.py
 
 # Reference during development
