@@ -111,7 +111,7 @@ The Digital Twin continuously polls the Physical Twin for traffic statistics, st
 - Python 3.8+
 - PyTorch, Flask, NumPy, Scikit-learn
 
-> [!IMPORTANT]IMPORTANT
+> [!IMPORTANT]
 > For **ComNetsEmu** installation, refer to the **official repository**: https://git.comnets.net/public-repo/comnetsemu . **ComNetsEmu** installation is a fundamental and mandatory step to replicate our work in your machine. **ComNetsEmu** must be installed in both the VMs (the one used for the _Physical Twin_ and the one used for the _Digital Twin_)
 
 <!--=========================================================================-->
@@ -149,7 +149,7 @@ The Digital Twin continuously polls the Physical Twin for traffic statistics, st
    ./setup_vm.sh
    ```
 
-> [!TIP]TIP
+> [!TIP]
 > The Vagrantfile automatically installs ComNetsEmu from the [official repo](https://git.comnets.net/public-repo/comnetsemu), clones this repository, and sets up dependencies.
 
 ---
@@ -279,7 +279,7 @@ h2 iperf -c 10.0.0.3 -u -b 8M -t 70 &
 h1 iperf -c 10.0.0.2 -u -b 29M -t 400
 ```
 
-> [!WARNING]WARNING
+> [!WARNING]
 > Press Ctrl+C to stop traffic and observe the model returning to NORMAL state.
 
 <!--=========================================================================-->
